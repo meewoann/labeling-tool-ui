@@ -6,7 +6,7 @@ export file) **chưa** được làm. Toàn bộ dữ liệu là dữ liệu gi�
 
 Chỉ dùng HTML + CSS + JavaScript thuần: không framework, không npm, không có bước build.
 
-**Demo:** https://meewoan.github.io/labeling-tool-ui/
+**Demo:** https://meewoann.github.io/labeling-tool-ui/
 
 ## Các trang
 
