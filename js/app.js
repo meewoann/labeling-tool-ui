@@ -267,15 +267,6 @@ function initSearch() {
    4. CODE RIÊNG TỪNG PAGE
    ========================================================== */
 
-/* ---------- index.html: Đăng nhập ---------- */
-function initLoginPage() {
-  document.getElementById('login-form').addEventListener('submit', event => {
-    event.preventDefault(); // chặn form gửi đi thật
-    window.location.href = 'projects.html';
-  });
-}
-
-
 /* ---------- projects.html: Danh sách project ---------- */
 function initProjectsPage() {
   // Thẻ thống kê tổng quan
@@ -736,7 +727,6 @@ function initSettingsPage() {
 
 // Mỗi giá trị data-page ứng với 1 hàm khởi tạo
 const PAGE_INIT = {
-  login: initLoginPage,
   projects: initProjectsPage,
   project: initProjectPage,
   label: initLabelPage,

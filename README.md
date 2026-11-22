@@ -12,7 +12,7 @@ Chỉ dùng HTML + CSS + JavaScript thuần: không framework, không npm, khôn
 
 | File | Nội dung |
 | --- | --- |
-| `index.html` | Đăng nhập. Nút **Sign in** chuyển sang danh sách project |
+| `index.html` | Trang vào: tự chuyển sang `projects.html` (chưa có đăng nhập) |
 | `projects.html` | Thẻ thống kê và lưới project (số ảnh, % đã gán nhãn, lần cập nhật). Nút **New Project** mở modal |
 | `project.html` | Tổng quan 1 project: 4 thẻ thống kê và 3 tab **Images / Classes / Members**, có modal Upload và Add/Edit class |
 | `label.html` | Workspace gán nhãn: thanh công cụ, canvas có bounding box giả, panel class/annotation/thông tin ảnh, dải thumbnail Prev/Next, nút Save, modal phím tắt |
@@ -32,6 +32,7 @@ Giao diện được thiết kế cho màn hình rộng từ 1280px trở lên.
 ```
 labeling-tool-ui/
 ├── index.html … 404.html   Mỗi trang là 1 file HTML. Sidebar và top bar được copy y hệt vào từng file
+├── serve.py                Chạy server nhỏ: python3 serve.py rồi mở http://localhost:8000
 ├── css/style.css           Toàn bộ CSS. Biến màu (--primary, --bg, --text…) nằm ở đầu file
 ├── js/app.js               Toàn bộ JavaScript (xem mục lục ở đầu file)
 └── README.md
