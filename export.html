@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Export · LabelKit</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310B981'/%3E%3Crect x='9' y='9' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body data-page="export">
+<div class="app">
+
+  <!-- ===== SIDEBAR (giống nhau ở mọi page) ===== -->
+  <aside class="sidebar">
+    <a href="projects.html" class="sidebar-logo">
+      <span class="logo-mark"><i data-lucide="scan"></i></span>
+      <span class="logo-text">LabelKit</span>
+    </a>
+
+    <nav class="sidebar-nav">
+      <p class="nav-section">Workspace</p>
+      <a href="projects.html" class="nav-link" data-nav="projects" title="Projects">
+        <i data-lucide="folder-kanban"></i><span>Projects</span>
+      </a>
+      <a href="label.html" class="nav-link" data-nav="label" title="Annotate">
+        <i data-lucide="pen-tool"></i><span>Annotate</span>
+      </a>
+      <a href="export.html" class="nav-link" data-nav="export" title="Export">
+        <i data-lucide="download"></i><span>Export</span>
+      </a>
+
+      <p class="nav-section">Account</p>
+      <a href="settings.html" class="nav-link" data-nav="settings" title="Settings">
+        <i data-lucide="settings"></i><span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="storage-box">
+      <p><span>Storage</span><b>6.2 / 10 GB</b></p>
+      <div class="progress"><div class="progress-fill" style="width: 62%"></div></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <a href="404.html" class="nav-link" title="Help & Docs">
+        <i data-lucide="circle-help"></i><span>Help &amp; Docs</span>
+      </a>
+      <a href="index.html" class="nav-link" title="Sign out">
+        <i data-lucide="log-out"></i><span>Sign out</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    <!-- ===== TOP BAR (giống nhau ở mọi page) ===== -->
+    <header class="topbar">
+      <div class="search">
+        <i data-lucide="search"></i>
+        <input type="text" id="global-search" placeholder="Search projects…">
+        <kbd>/</kbd>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" title="Notifications" data-toast="You have no new notifications">
+          <i data-lucide="bell"></i>
+        </button>
+        <a href="settings.html" class="avatar" title="Alex Nguyen · Settings">AN</a>
+      </div>
+    </header>
+
+    <!-- ===== NỘI DUNG TRANG ===== -->
+    <main class="content">
+      <div class="breadcrumb">
+        <a href="projects.html">Projects</a>
+        <i data-lucide="chevron-right"></i>
+        <a href="project.html">Street Traffic Detection</a>
+        <i data-lucide="chevron-right"></i>
+        <span>Export</span>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <h1>Export dataset</h1>
+          <p class="text-muted">Download your labeled images in a format your training pipeline understands.</p>
+        </div>
+      </div>
+
+      <div class="export-layout">
+        <div class="export-main">
+
+          <!-- Bước 1: chọn project -->
+          <div class="card card-padded">
+            <h2>1. Project</h2>
+            <p class="text-muted section-desc">Only labeled images are included in the export.</p>
+            <!-- JS đổ danh sách project vào đây -->
+            <select class="select" id="export-project"></select>
+          </div>
+
+          <!-- Bước 2: chọn định dạng (click card để chọn) -->
+          <div class="card card-padded">
+            <h2>2. Format</h2>
+            <p class="text-muted section-desc">Choose the annotation format for your model.</p>
+            <div class="format-grid">
+              <button class="format-card active" data-format="yolo">
+                <span class="format-check"><i data-lucide="check"></i></span>
+                <span class="format-icon"><i data-lucide="file-text"></i></span>
+                <h3>YOLO</h3>
+                <p>One .txt file per image with normalized boxes.</p>
+                <span class="badge">YOLOv5 – v11</span>
+              </button>
+              <button class="format-card" data-format="coco">
+                <span class="format-check"><i data-lucide="check"></i></span>
+                <span class="format-icon"><i data-lucide="file-json"></i></span>
+                <h3>COCO</h3>
+                <p>A single JSON file with images, boxes and polygons.</p>
+                <span class="badge">Detectron2, MMDet</span>
+              </button>
+              <button class="format-card" data-format="voc">
+                <span class="format-check"><i data-lucide="check"></i></span>
+                <span class="format-icon"><i data-lucide="file-code"></i></span>
+                <h3>Pascal VOC</h3>
+                <p>One .xml file per image, classic format.</p>
+                <span class="badge">TensorFlow OD API</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Bước 3: chia tỉ lệ train / val / test -->
+          <div class="card card-padded">
+            <h2>3. Dataset split</h2>
+            <p class="text-muted section-desc">Drag the sliders. Test gets whatever is left.</p>
+
+            <div class="split-bar">
+              <div class="split-train" id="bar-train"></div>
+              <div class="split-val" id="bar-val"></div>
+              <div class="split-test" id="bar-test"></div>
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-head">
+                <span><span class="legend-dot split-train"></span>Train</span>
+                <b id="train-value">70%</b>
+              </div>
+              <input type="range" id="range-train" min="0" max="100" step="5" value="70">
+            </div>
+
+            <div class="slider-row">
+              <div class="slider-head">
+                <span><span class="legend-dot split-val"></span>Validation</span>
+                <b id="val-value">20%</b>
+              </div>
+              <input type="range" id="range-val" min="0" max="100" step="5" value="20">
+            </div>
+
+            <div class="test-row">
+              <span><span class="legend-dot split-test"></span>Test</span>
+              <b id="test-value">10%</b>
+            </div>
+          </div>
+
+          <!-- Bước 4: tuỳ chọn thêm (chỉ UI) -->
+          <div class="card card-padded">
+            <h2>4. Options</h2>
+            <p class="text-muted section-desc">Extra settings for the exported archive.</p>
+            <div class="option-list">
+              <label class="checkbox"><input type="checkbox" checked> Include image files</label>
+              <label class="checkbox"><input type="checkbox" checked> Shuffle images before splitting</label>
+              <label class="checkbox"><input type="checkbox"> Include images still in review</label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cột phải: tóm tắt + nút Export (JS cập nhật số liệu) -->
+        <aside class="card card-padded summary-card">
+          <h2>Summary</h2>
+          <p class="text-muted section-desc">Review before exporting.</p>
+          <div class="summary-row"><span>Project</span><span id="sum-project">—</span></div>
+          <div class="summary-row"><span>Format</span><span id="sum-format">—</span></div>
+          <div class="summary-row"><span>Labeled images</span><span id="sum-images">0</span></div>
+          <div class="summary-row"><span>Train</span><span id="sum-train">0</span></div>
+          <div class="summary-row"><span>Validation</span><span id="sum-val">0</span></div>
+          <div class="summary-row"><span>Test</span><span id="sum-test">0</span></div>
+
+          <button class="btn btn-primary btn-block" id="btn-export"><i data-lucide="download"></i>Export</button>
+          <p class="text-small text-muted summary-note">You'll get a .zip file when it's ready.</p>
+        </aside>
+      </div>
+    </main>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

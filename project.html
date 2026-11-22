@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Project · LabelKit</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310B981'/%3E%3Crect x='9' y='9' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body data-page="project">
+<div class="app">
+
+  <!-- ===== SIDEBAR (giống nhau ở mọi page) ===== -->
+  <aside class="sidebar">
+    <a href="projects.html" class="sidebar-logo">
+      <span class="logo-mark"><i data-lucide="scan"></i></span>
+      <span class="logo-text">LabelKit</span>
+    </a>
+
+    <nav class="sidebar-nav">
+      <p class="nav-section">Workspace</p>
+      <a href="projects.html" class="nav-link" data-nav="projects" title="Projects">
+        <i data-lucide="folder-kanban"></i><span>Projects</span>
+      </a>
+      <a href="label.html" class="nav-link" data-nav="label" title="Annotate">
+        <i data-lucide="pen-tool"></i><span>Annotate</span>
+      </a>
+      <a href="export.html" class="nav-link" data-nav="export" title="Export">
+        <i data-lucide="download"></i><span>Export</span>
+      </a>
+
+      <p class="nav-section">Account</p>
+      <a href="settings.html" class="nav-link" data-nav="settings" title="Settings">
+        <i data-lucide="settings"></i><span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="storage-box">
+      <p><span>Storage</span><b>6.2 / 10 GB</b></p>
+      <div class="progress"><div class="progress-fill" style="width: 62%"></div></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <a href="404.html" class="nav-link" title="Help & Docs">
+        <i data-lucide="circle-help"></i><span>Help &amp; Docs</span>
+      </a>
+      <a href="index.html" class="nav-link" title="Sign out">
+        <i data-lucide="log-out"></i><span>Sign out</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    <!-- ===== TOP BAR (giống nhau ở mọi page) ===== -->
+    <header class="topbar">
+      <div class="search">
+        <i data-lucide="search"></i>
+        <input type="text" id="global-search" placeholder="Search projects…">
+        <kbd>/</kbd>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" title="Notifications" data-toast="You have no new notifications">
+          <i data-lucide="bell"></i>
+        </button>
+        <a href="settings.html" class="avatar" title="Alex Nguyen · Settings">AN</a>
+      </div>
+    </header>
+
+    <!-- ===== NỘI DUNG TRANG ===== -->
+    <main class="content">
+      <div class="breadcrumb">
+        <a href="projects.html">Projects</a>
+        <i data-lucide="chevron-right"></i>
+        <span id="breadcrumb-name">Project</span>
+      </div>
+
+      <div class="page-header">
+        <div>
+          <h1 id="project-name">Project</h1>
+          <p class="text-muted" id="project-desc"></p>
+        </div>
+        <div class="page-actions">
+          <a href="export.html" class="btn btn-secondary"><i data-lucide="download"></i>Export</a>
+          <a href="label.html" class="btn btn-primary"><i data-lucide="pen-tool"></i>Start labeling</a>
+        </div>
+      </div>
+
+      <!-- 4 thẻ thống kê (JS điền số) -->
+      <div class="stats-grid">
+        <div class="card stat-card">
+          <div>
+            <p class="stat-label">Total images</p>
+            <p class="stat-value" id="stat-total">0</p>
+            <p class="stat-sub">Across all batches</p>
+          </div>
+          <span class="stat-icon blue"><i data-lucide="images"></i></span>
+        </div>
+        <div class="card stat-card">
+          <div>
+            <p class="stat-label">Labeled</p>
+            <p class="stat-value" id="stat-labeled">0</p>
+            <p class="stat-sub" id="stat-labeled-sub"></p>
+          </div>
+          <span class="stat-icon"><i data-lucide="circle-check"></i></span>
+        </div>
+        <div class="card stat-card">
+          <div>
+            <p class="stat-label">Unlabeled</p>
+            <p class="stat-value" id="stat-unlabeled">0</p>
+            <p class="stat-sub" id="stat-unlabeled-sub"></p>
+          </div>
+          <span class="stat-icon gray"><i data-lucide="circle-dashed"></i></span>
+        </div>
+        <div class="card stat-card">
+          <div>
+            <p class="stat-label">Classes</p>
+            <p class="stat-value" id="stat-classes">0</p>
+            <p class="stat-sub">Label categories</p>
+          </div>
+          <span class="stat-icon amber"><i data-lucide="tags"></i></span>
+        </div>
+      </div>
+
+      <!-- Thanh tab: data-tab="images" → hiện <div id="tab-images"> -->
+      <div class="tabs">
+        <button class="tab active" data-tab="images">
+          <i data-lucide="image"></i>Images <span class="tab-count" id="tab-count-images">0</span>
+        </button>
+        <button class="tab" data-tab="classes">
+          <i data-lucide="tag"></i>Classes <span class="tab-count">6</span>
+        </button>
+        <button class="tab" data-tab="members">
+          <i data-lucide="users"></i>Members <span class="tab-count" id="tab-count-members">0</span>
+        </button>
+      </div>
+
+      <!-- Tab Images -->
+      <div class="tab-panel active" id="tab-images">
+        <div class="toolbar-row">
+          <div class="chip-group">
+            <button class="chip active" data-filter="all">All <span class="chip-count"></span></button>
+            <button class="chip" data-filter="labeled">Labeled <span class="chip-count"></span></button>
+            <button class="chip" data-filter="unlabeled">Unlabeled <span class="chip-count"></span></button>
+            <button class="chip" data-filter="review">In review <span class="chip-count"></span></button>
+          </div>
+          <div class="page-actions">
+            <span class="text-small text-muted" style="align-self: center;" id="images-showing"></span>
+            <button class="btn btn-primary btn-sm" data-open-modal="modal-upload">
+              <i data-lucide="upload"></i>Upload
+            </button>
+          </div>
+        </div>
+        <!-- JS render thumbnail từ mảng IMAGES -->
+        <div class="image-grid" id="image-grid"></div>
+      </div>
+
+      <!-- Tab Classes -->
+      <div class="tab-panel" id="tab-classes">
+        <div class="toolbar-row">
+          <p class="text-muted">Classes are the labels annotators can assign to objects.</p>
+          <button class="btn btn-primary btn-sm" id="btn-add-class"><i data-lucide="plus"></i>Add class</button>
+        </div>
+        <div class="card" id="class-list"></div>
+      </div>
+
+      <!-- Tab Members -->
+      <div class="tab-panel" id="tab-members">
+        <div class="toolbar-row">
+          <p class="text-muted">People who can view or label this project.</p>
+          <button class="btn btn-primary btn-sm" data-toast="Invites are not available in this prototype">
+            <i data-lucide="user-plus"></i>Invite member
+          </button>
+        </div>
+        <div class="card" id="member-list"></div>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== MODAL: Upload ảnh (chỉ UI) ===== -->
+<div class="modal-overlay" id="modal-upload">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2>Upload images</h2>
+        <p class="text-muted">JPG or PNG, up to 20 MB each.</p>
+      </div>
+      <button class="icon-btn" data-close-modal title="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="dropzone">
+        <div class="dropzone-icon"><i data-lucide="cloud-upload"></i></div>
+        <p><b>Click to browse</b> or drag and drop files here</p>
+        <p class="text-small text-muted">You can also upload a .zip archive</p>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal>Cancel</button>
+      <button class="btn btn-primary" data-close-modal data-toast="Upload started (demo only)" data-toast-type="success">
+        <i data-lucide="upload"></i>Upload
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ===== MODAL: Thêm / sửa class (chỉ UI) ===== -->
+<div class="modal-overlay" id="modal-class">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="class-modal-title">Add class</h2>
+      <button class="icon-btn" data-close-modal title="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label" for="class-name-input">Class name</label>
+        <input class="input" id="class-name-input" placeholder="e.g. motorbike">
+      </div>
+      <div class="form-group">
+        <span class="form-label">Color</span>
+        <!-- JS tạo các ô màu từ mảng COLOR_OPTIONS -->
+        <div class="color-options" id="color-options"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" data-close-modal>Cancel</button>
+      <button class="btn btn-primary" data-close-modal data-toast="Class saved (demo only)" data-toast-type="success">
+        Save class
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

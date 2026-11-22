@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Annotate · LabelKit</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310B981'/%3E%3Crect x='9' y='9' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+
+<!-- sidebar-compact: sidebar chỉ còn icon để canvas rộng hơn
+     workspace-page: trang cao đúng 1 màn hình, không cuộn -->
+<body data-page="label" class="sidebar-compact workspace-page">
+<div class="app">
+
+  <!-- ===== SIDEBAR (giống nhau ở mọi page) ===== -->
+  <aside class="sidebar">
+    <a href="projects.html" class="sidebar-logo">
+      <span class="logo-mark"><i data-lucide="scan"></i></span>
+      <span class="logo-text">LabelKit</span>
+    </a>
+
+    <nav class="sidebar-nav">
+      <p class="nav-section">Workspace</p>
+      <a href="projects.html" class="nav-link" data-nav="projects" title="Projects">
+        <i data-lucide="folder-kanban"></i><span>Projects</span>
+      </a>
+      <a href="label.html" class="nav-link" data-nav="label" title="Annotate">
+        <i data-lucide="pen-tool"></i><span>Annotate</span>
+      </a>
+      <a href="export.html" class="nav-link" data-nav="export" title="Export">
+        <i data-lucide="download"></i><span>Export</span>
+      </a>
+
+      <p class="nav-section">Account</p>
+      <a href="settings.html" class="nav-link" data-nav="settings" title="Settings">
+        <i data-lucide="settings"></i><span>Settings</span>
+      </a>
+    </nav>
+
+    <div class="storage-box">
+      <p><span>Storage</span><b>6.2 / 10 GB</b></p>
+      <div class="progress"><div class="progress-fill" style="width: 62%"></div></div>
+    </div>
+
+    <div class="sidebar-footer">
+      <a href="404.html" class="nav-link" title="Help & Docs">
+        <i data-lucide="circle-help"></i><span>Help &amp; Docs</span>
+      </a>
+      <a href="index.html" class="nav-link" title="Sign out">
+        <i data-lucide="log-out"></i><span>Sign out</span>
+      </a>
+    </div>
+  </aside>
+
+  <div class="main">
+
+    <!-- ===== TOP BAR (giống nhau ở mọi page) ===== -->
+    <header class="topbar">
+      <div class="search">
+        <i data-lucide="search"></i>
+        <input type="text" id="global-search" placeholder="Search projects…">
+        <kbd>/</kbd>
+      </div>
+      <div class="topbar-right">
+        <button class="icon-btn" title="Notifications" data-toast="You have no new notifications">
+          <i data-lucide="bell"></i>
+        </button>
+        <a href="settings.html" class="avatar" title="Alex Nguyen · Settings">AN</a>
+      </div>
+    </header>
+
+    <!-- ===== WORKSPACE GÁN NHÃN ===== -->
+    <main class="workspace">
+
+      <!-- Trên: Back, tên ảnh, phím tắt, Save -->
+      <div class="ws-header">
+        <div class="ws-title">
+          <a href="project.html" class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i>Back</a>
+          <span class="divider-v"></span>
+          <div>
+            <h2 id="image-title">img_0001.jpg</h2>
+            <p class="text-small text-muted">Street Traffic Detection · <span id="image-counter">1 / 12</span></p>
+          </div>
+          <span class="status-badge" id="image-status"></span>
+        </div>
+        <div class="ws-actions">
+          <button class="btn btn-ghost btn-sm" data-open-modal="modal-shortcuts">
+            <i data-lucide="keyboard"></i>Shortcuts
+          </button>
+          <button class="btn btn-secondary btn-sm" data-toast="Image sent for review (demo only)" data-toast-type="success">
+            <i data-lucide="send"></i>Submit for review
+          </button>
+          <button class="btn btn-primary btn-sm" id="btn-save"><i data-lucide="save"></i>Save</button>
+        </div>
+      </div>
+
+      <div class="ws-body">
+
+        <!-- Trái: thanh công cụ. data-tool là tên tool, data-tooltip là chữ hiện khi hover -->
+        <div class="tool-bar">
+          <button class="tool-btn active" data-tool="select" data-tooltip="Select (V)">
+            <i data-lucide="mouse-pointer-2"></i>
+          </button>
+          <button class="tool-btn" data-tool="bbox" data-tooltip="Bounding box (B)">
+            <i data-lucide="square-dashed"></i>
+          </button>
+          <button class="tool-btn" data-tool="polygon" data-tooltip="Polygon (P)">
+            <i data-lucide="pentagon"></i>
+          </button>
+          <div class="tool-divider"></div>
+          <button class="tool-btn" data-tool="pan" data-tooltip="Pan (H)">
+            <i data-lucide="hand"></i>
+          </button>
+          <button class="tool-btn" data-tool="zoom" data-tooltip="Zoom (Z)">
+            <i data-lucide="zoom-in"></i>
+          </button>
+        </div>
+
+        <!-- Giữa: canvas hiển thị ảnh + bounding box giả -->
+        <div class="canvas-area">
+          <div class="canvas-hint" id="canvas-hint"></div>
+
+          <div class="canvas-stage" id="canvas-stage">
+            <img id="canvas-image" alt="Image being labeled">
+            <!-- JS vẽ các div .bbox vào đây -->
+            <div class="box-layer" id="box-layer"></div>
+          </div>
+
+          <div class="zoom-control">
+            <button id="btn-zoom-out" title="Zoom out"><i data-lucide="minus"></i></button>
+            <button id="zoom-level" title="Reset zoom">100%</button>
+            <button id="btn-zoom-in" title="Zoom in"><i data-lucide="plus"></i></button>
+          </div>
+        </div>
+
+        <!-- Phải: chọn class, danh sách annotation, thông tin ảnh -->
+        <aside class="ws-panel">
+          <section class="panel-section">
+            <div class="panel-title">Classes</div>
+            <div class="class-picker" id="class-picker"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="panel-title">
+              Annotations <span class="badge" id="annotation-count">0</span>
+            </div>
+            <div class="annotation-list" id="annotation-list"></div>
+          </section>
+
+          <section class="panel-section">
+            <div class="panel-title">Image info</div>
+            <div id="image-info"></div>
+          </section>
+        </aside>
+      </div>
+
+      <!-- Dưới: Prev / dải thumbnail / Next -->
+      <div class="ws-footer">
+        <button class="btn btn-secondary btn-sm" id="btn-prev"><i data-lucide="chevron-left"></i>Prev</button>
+        <div class="thumb-strip" id="thumb-strip"></div>
+        <button class="btn btn-secondary btn-sm" id="btn-next">Next<i data-lucide="chevron-right"></i></button>
+      </div>
+    </main>
+  </div>
+</div>
+
+<!-- ===== MODAL: Phím tắt ===== -->
+<div class="modal-overlay" id="modal-shortcuts">
+  <div class="modal">
+    <div class="modal-header">
+      <div>
+        <h2>Keyboard shortcuts</h2>
+        <p class="text-muted">Work faster without leaving the keyboard.</p>
+      </div>
+      <button class="icon-btn" data-close-modal title="Close"><i data-lucide="x"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="shortcut-group">
+        <h3>Tools</h3>
+        <div class="shortcut-row"><span>Select</span><span><kbd>V</kbd></span></div>
+        <div class="shortcut-row"><span>Bounding box</span><span><kbd>B</kbd></span></div>
+        <div class="shortcut-row"><span>Polygon</span><span><kbd>P</kbd></span></div>
+        <div class="shortcut-row"><span>Pan</span><span><kbd>H</kbd></span></div>
+        <div class="shortcut-row"><span>Zoom</span><span><kbd>Z</kbd></span></div>
+      </div>
+      <div class="shortcut-group">
+        <h3>Navigation &amp; actions</h3>
+        <div class="shortcut-row"><span>Previous / next image</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
+        <div class="shortcut-row"><span>Select class</span><span><kbd>1</kbd>–<kbd>9</kbd></span></div>
+        <div class="shortcut-row"><span>Save</span><span><kbd>Ctrl</kbd><kbd>S</kbd></span></div>
+        <div class="shortcut-row"><span>Show shortcuts</span><span><kbd>?</kbd></span></div>
+        <div class="shortcut-row"><span>Close dialog</span><span><kbd>Esc</kbd></span></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-primary" data-close-modal>Got it</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
