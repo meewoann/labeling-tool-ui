@@ -14,12 +14,12 @@
 
 
 /* ==========================================================
-   1. MOCK DATA — sửa ở đây để đổi nội dung hiển thị
+   1. MOCK DATA — dữ liệu mẫu (mặc định đang TẮT, xem USE_DEMO_DATA)
    ========================================================== */
 
 // Danh sách project (trang projects.html)
 // cover: từ khoá để lấy ảnh ngẫu nhiên cố định từ picsum.photos
-const PROJECTS = [
+const DEMO_PROJECTS = [
   { id: 1, name: 'Street Traffic Detection', description: 'Cars, buses and pedestrians at city intersections.', type: 'Bounding box', totalImages: 1240, labeledImages: 868, classes: 6, members: 4, updatedAt: '2 hours ago', cover: 'traffic' },
   { id: 2, name: 'Retail Shelf Products', description: 'Detect packaged products on supermarket shelves.', type: 'Bounding box', totalImages: 860, labeledImages: 344, classes: 12, members: 3, updatedAt: 'Yesterday', cover: 'shelf' },
   { id: 3, name: 'Warehouse Safety (PPE)', description: 'Helmets, vests and gloves on warehouse workers.', type: 'Bounding box', totalImages: 2150, labeledImages: 1935, classes: 5, members: 5, updatedAt: '3 days ago', cover: 'warehouse' },
@@ -29,7 +29,7 @@ const PROJECTS = [
 ];
 
 // Danh sách class (nhãn) — dùng chung cho mọi project để đơn giản
-const CLASSES = [
+const DEMO_CLASSES = [
   { id: 1, name: 'car', color: '#3B82F6', count: 1842 },
   { id: 2, name: 'person', color: '#F59E0B', count: 1210 },
   { id: 3, name: 'bicycle', color: '#8B5CF6', count: 342 },
@@ -40,7 +40,7 @@ const CLASSES = [
 
 // Danh sách ảnh — status: 'labeled' | 'unlabeled' | 'review'
 // boxes: bounding box giả, toạ độ tính bằng % so với ảnh (x, y = góc trên trái)
-const IMAGES = [
+const DEMO_IMAGES = [
   { id: 1, name: 'img_0001.jpg', seed: 'street-1', status: 'labeled', size: '1600 × 1200', annotator: 'Linh Tran',
     boxes: [{ classId: 1, x: 10, y: 52, w: 30, h: 28 }, { classId: 2, x: 52, y: 30, w: 12, h: 46 }, { classId: 6, x: 80, y: 8, w: 8, h: 22 }] },
   { id: 2, name: 'img_0002.jpg', seed: 'street-2', status: 'labeled', size: '1600 × 1200', annotator: 'Minh Pham',
@@ -65,13 +65,24 @@ const IMAGES = [
 ];
 
 // Thành viên trong project (tab Members)
-const MEMBERS = [
+const DEMO_MEMBERS = [
   { name: 'Alex Nguyen', email: 'alex@example.com', role: 'Owner', labeled: 412, color: '#10B981' },
   { name: 'Linh Tran', email: 'linh@example.com', role: 'Annotator', labeled: 298, color: '#3B82F6' },
   { name: 'Minh Pham', email: 'minh@example.com', role: 'Annotator', labeled: 158, color: '#F59E0B' },
   { name: 'Sara Kim', email: 'sara@example.com', role: 'Reviewer', labeled: 0, color: '#8B5CF6' },
   { name: 'Tom Le', email: 'tom@example.com', role: 'Viewer', labeled: 0, color: '#EC4899' },
 ];
+
+// ----- Công tắc dữ liệu giả -----
+// false = chưa có dữ liệu nào (giao diện trống, như khi chưa upload gì)
+// true  = hiện dữ liệu mẫu ở trên để xem giao diện khi đã có project, ảnh...
+const USE_DEMO_DATA = false;
+
+// Các mảng mà toàn bộ code bên dưới sử dụng
+const PROJECTS = USE_DEMO_DATA ? DEMO_PROJECTS : [];
+const CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];
+const IMAGES = USE_DEMO_DATA ? DEMO_IMAGES : [];
+const MEMBERS = USE_DEMO_DATA ? DEMO_MEMBERS : [];
 
 // Chữ hiển thị cho từng trạng thái ảnh
 const STATUS_TEXT = { labeled: 'Labeled', unlabeled: 'Unlabeled', review: 'In review' };
@@ -117,6 +128,17 @@ function getInitials(name) {
 // Tìm class theo id
 function findClass(id) {
   return CLASSES.find(c => c.id === id);
+}
+
+// HTML cho trạng thái trống (chưa có dữ liệu). buttonHTML có thể để trống
+function emptyStateHTML(icon, title, text, buttonHTML = '') {
+  return `
+    <div class="empty-state">
+      <div class="empty-icon"><i data-lucide="${icon}"></i></div>
+      <h3>${title}</h3>
+      <p>${text}</p>
+      ${buttonHTML}
+    </div>`;
 }
 
 // Nhóm "chọn 1": click phần tử nào thì phần tử đó có class "active",
@@ -316,12 +338,18 @@ function initProjectsPage() {
 
   // Vẽ danh sách project ra lưới
   function render(list) {
-    if (list.length === 0) {
-      grid.innerHTML = '<p class="empty-state">No projects match your search.</p>';
+    if (PROJECTS.length === 0) {
+      // Chưa có project nào
+      grid.innerHTML = emptyStateHTML('folder-kanban', 'No projects yet',
+        'Create your first project to start uploading and labeling images.',
+        '<button class="btn btn-primary" data-open-modal="modal-new-project"><i data-lucide="plus"></i>New Project</button>');
+    } else if (list.length === 0) {
+      // Có project nhưng không khớp ô search
+      grid.innerHTML = emptyStateHTML('search', 'No matching projects', 'Try a different search term.');
     } else {
       grid.innerHTML = list.map(projectCardHTML).join('');
     }
-    document.getElementById('project-count').textContent = `${list.length} projects`;
+    document.getElementById('project-count').textContent = `${list.length} ${list.length === 1 ? 'project' : 'projects'}`;
     refreshIcons();
   }
 
@@ -350,6 +378,15 @@ function initProjectPage() {
   const id = Number(getQueryParam('id'));
   const project = PROJECTS.find(p => p.id === id) || PROJECTS[0];
 
+  // Chưa có project nào (hoặc id sai) → báo trống rồi dừng
+  if (!project) {
+    document.querySelector('.content').innerHTML = emptyStateHTML('folder-kanban', 'Project not found',
+      'There are no projects yet. Create one from the projects page.',
+      '<a href="projects.html" class="btn btn-primary"><i data-lucide="arrow-left"></i>Back to projects</a>');
+    refreshIcons();
+    return;
+  }
+
   // Tên, mô tả
   document.title = `${project.name} · LabelKit`;
   document.getElementById('breadcrumb-name').textContent = project.name;
@@ -364,6 +401,7 @@ function initProjectPage() {
   document.getElementById('stat-unlabeled').textContent = formatNumber(unlabeled);
   document.getElementById('stat-unlabeled-sub').textContent = `${percent(unlabeled, project.totalImages)}% remaining`;
   document.getElementById('stat-classes').textContent = project.classes;
+  document.getElementById('tab-count-classes').textContent = CLASSES.length;
   document.getElementById('tab-count-images').textContent = formatNumber(project.totalImages);
   document.getElementById('images-showing').textContent = `Showing ${IMAGES.length} of ${formatNumber(project.totalImages)} images`;
 
@@ -372,6 +410,11 @@ function initProjectPage() {
 
   function renderImages(filter) {
     const list = filter === 'all' ? IMAGES : IMAGES.filter(img => img.status === filter);
+    if (list.length === 0) {
+      grid.innerHTML = emptyStateHTML('images', 'No images', 'Upload images to start labeling.');
+      refreshIcons();
+      return;
+    }
     grid.innerHTML = list.map(img => `
       <a href="label.html?image=${img.id}" class="image-card">
         <img src="${imageUrl(img.seed, 320, 240)}" alt="${img.name}" loading="lazy">
@@ -448,6 +491,15 @@ function initProjectPage() {
 
 /* ---------- label.html: Workspace gán nhãn ---------- */
 function initLabelPage() {
+  // Chưa có ảnh nào → hiện trạng thái trống thay cho cả workspace rồi dừng
+  if (IMAGES.length === 0) {
+    document.querySelector('.workspace').innerHTML = emptyStateHTML('images', 'No images to label',
+      'Upload images to a project first, then come back here to annotate them.',
+      '<a href="projects.html" class="btn btn-primary"><i data-lucide="folder-kanban"></i>Go to projects</a>');
+    refreshIcons();
+    return;
+  }
+
   // Trạng thái hiện tại của trang
   const startId = Number(getQueryParam('image'));
   let currentIndex = Math.max(0, IMAGES.findIndex(img => img.id === startId)); // không tìm thấy (-1) → 0
@@ -638,7 +690,10 @@ function initExportPage() {
 
   // Đổ danh sách project vào ô chọn (?project=2 thì chọn sẵn project 2)
   const select = document.getElementById('export-project');
-  select.innerHTML = PROJECTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+  select.innerHTML = PROJECTS.length
+    ? PROJECTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+    : '<option>No projects yet</option>';
+  select.disabled = PROJECTS.length === 0;
   if (getQueryParam('project')) select.value = getQueryParam('project');
 
   // Chọn định dạng
@@ -677,12 +732,12 @@ function initExportPage() {
 
     // Chỉ xuất ảnh đã gán nhãn
     const project = PROJECTS.find(p => p.id === Number(select.value));
-    const total = project.labeledImages;
+    const total = project ? project.labeledImages : 0; // chưa có project → 0 ảnh
     const nTrain = Math.round((total * train) / 100);
     const nVal = Math.round((total * val) / 100);
     const nTest = total - nTrain - nVal;
 
-    document.getElementById('sum-project').textContent = project.name;
+    document.getElementById('sum-project').textContent = project ? project.name : '—';
     document.getElementById('sum-format').textContent = FORMAT_NAMES[selectedFormat];
     document.getElementById('sum-images').textContent = formatNumber(total);
     document.getElementById('sum-train').textContent = formatNumber(nTrain);
@@ -694,6 +749,7 @@ function initExportPage() {
   // Nút Export: giả vờ chạy 1.2 giây rồi báo thành công
   const exportBtn = document.getElementById('btn-export');
   const originalHTML = exportBtn.innerHTML;
+  exportBtn.disabled = PROJECTS.length === 0; // không có project thì không export được
   exportBtn.addEventListener('click', () => {
     exportBtn.disabled = true;
     exportBtn.textContent = 'Exporting…';

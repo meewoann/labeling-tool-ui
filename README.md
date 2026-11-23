@@ -42,7 +42,7 @@ labeling-tool-ui/
 
 **`js/app.js`** gồm 5 phần:
 
-1. **Mock data**: các mảng `PROJECTS`, `CLASSES`, `IMAGES`, `MEMBERS`. Sửa ở đây để đổi nội dung hiển thị.
+1. **Mock data**: các mảng `DEMO_PROJECTS`, `DEMO_CLASSES`, `DEMO_IMAGES`, `DEMO_MEMBERS`. Mặc định công tắc `USE_DEMO_DATA = false` nên các trang hiện trạng thái trống (chưa upload gì). Đổi thành `true` để xem giao diện với dữ liệu mẫu.
 2. **Helper**: `showToast()`, `openModal()`, `makeSelectable()`…
 3. **Tương tác chung**: highlight sidebar, mở/đóng modal, chuyển tab, ô search.
 4. **Code riêng từng trang**: `initProjectsPage()`, `initLabelPage()`…
