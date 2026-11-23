@@ -86,7 +86,8 @@ const CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];   // chưa có trong database
 let IMAGES = (USE_DEMO_DATA ? DEMO_IMAGES : []).map(mockImage);
 const MEMBERS = USE_DEMO_DATA ? DEMO_MEMBERS : [];   // chưa có trong database
 
-let API_MODE = false; // true khi tìm thấy backend (loadData sẽ quyết định)
+let API_MODE = false;     // true khi tìm thấy backend (loadData sẽ quyết định)
+let CURRENT_USER = null;  // người đang đăng nhập: { id, username, is_admin } (chỉ có khi có backend)
 
 // Chữ hiển thị cho từng trạng thái ảnh
 const STATUS_TEXT = { labeled: 'Labeled', unlabeled: 'Unlabeled', review: 'In review' };
@@ -217,9 +218,21 @@ async function errorMessage(response) {
   return `Request failed (${response.status})`;
 }
 
+// Chuyển về trang đăng nhập, nhớ trang đang xem để đăng nhập xong quay lại đúng chỗ
+function redirectToLogin() {
+  const here = window.location.pathname.split('/').pop() + window.location.search;
+  window.location.href = `index.html?next=${encodeURIComponent(here)}`;
+}
+
 // Gọi API và trả về JSON. Lỗi thì throw Error có chữ dễ hiểu.
 async function api(path, options = {}) {
   const response = await fetch(path, options);
+  if (response.status === 401 && currentPage !== 'login') {
+    // Chưa đăng nhập hoặc phiên đã hết hạn → về trang đăng nhập.
+    // Trả về promise không bao giờ xong để code phía sau đứng im, không hiện lỗi chớp nhoáng khi trang đang chuyển.
+    redirectToLogin();
+    return new Promise(() => {});
+  }
   if (!response.ok) throw new Error(await errorMessage(response));
   return response.json();
 }
@@ -244,10 +257,17 @@ async function detectApi() {
   }
 }
 
-// Chạy 1 lần khi mở trang: nếu có backend thì nạp danh sách project từ database
+// Chạy 1 lần khi mở trang: nếu có backend thì xác nhận đã đăng nhập, rồi nạp danh sách project từ database
 async function loadData() {
   API_MODE = await detectApi();
-  if (API_MODE) {
+  if (API_MODE && currentPage !== 'login') {
+    // Hỏi /api/auth/status (công khai) thay vì /api/auth/me để chưa đăng nhập không sinh lỗi 401 đỏ trong console
+    const status = await api('/api/auth/status');
+    if (!status.user) {
+      redirectToLogin();
+      return new Promise(() => {});  // đứng im chờ trình duyệt chuyển trang
+    }
+    CURRENT_USER = status.user;
     PROJECTS = (await api('/api/projects')).map(projectFromApi);
   }
 }
@@ -329,6 +349,27 @@ function highlightSidebar() {
 
   document.querySelectorAll('.nav-link').forEach(link => {
     if (link.dataset.nav === current) link.classList.add('active');
+  });
+}
+
+// Có đăng nhập: avatar hiện chữ cái đầu của username, và hiện nút Sign out trên sidebar
+function initUser() {
+  if (!API_MODE || !CURRENT_USER) return;
+
+  document.querySelectorAll('.topbar .avatar').forEach(avatar => {
+    avatar.textContent = CURRENT_USER.username.slice(0, 2).toUpperCase();
+    avatar.title = `${CURRENT_USER.username} · Settings`;
+  });
+
+  const logout = document.getElementById('btn-logout');
+  if (!logout) return;
+  logout.hidden = false;
+  logout.addEventListener('click', async event => {
+    event.preventDefault();
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } catch (e) { /* mất mạng thì vẫn quay về trang đăng nhập */ }
+    window.location.href = 'index.html';
   });
 }
 
@@ -414,6 +455,74 @@ function initSearch() {
 /* ==========================================================
    4. CODE RIÊNG TỪNG PAGE
    ========================================================== */
+
+/* ---------- index.html: Đăng nhập ---------- */
+async function initLoginPage() {
+  // Không có backend (mở file trực tiếp) thì không có đăng nhập: vào thẳng danh sách project
+  if (!API_MODE) {
+    window.location.replace('projects.html');
+    return;
+  }
+
+  // Chỉ cho quay lại các trang .html của mình, không cho nhảy sang web khác
+  // (nếu không, link "index.html?next=https://web-xau.com" sẽ đưa người dùng đi đâu cũng được)
+  function goNext() {
+    const next = getQueryParam('next') || '';
+    const safe = /^[A-Za-z0-9_-]+\.html(\?[^#]*)?$/.test(next);
+    window.location.replace(safe ? next : 'projects.html');
+  }
+
+  const status = await api('/api/auth/status');
+  if (status.user) {            // đã đăng nhập rồi thì khỏi nhập lại
+    goNext();
+    return;
+  }
+
+  // Database chưa có tài khoản nào → biến form thành "tạo tài khoản admin đầu tiên"
+  const setup = status.needs_setup;
+  if (setup) {
+    document.getElementById('login-title').textContent = 'Create the first account';
+    document.getElementById('login-sub').textContent = 'This account becomes the admin. You can add teammates later.';
+    document.getElementById('confirm-group').hidden = false;
+    document.getElementById('password').autocomplete = 'new-password';
+    document.getElementById('login-submit').textContent = 'Create account';
+    document.getElementById('login-footer').hidden = true;
+  }
+
+  const error = document.getElementById('login-error');
+  function showError(message) {
+    error.textContent = message;
+    error.hidden = false;
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    const username = document.getElementById('username').value.trim();
+    const password = document.getElementById('password').value;
+
+    if (!username || !password) {
+      showError('Enter your username and password.');
+      return;
+    }
+    if (setup && password !== document.getElementById('password2').value) {
+      showError('The two passwords do not match.');
+      return;
+    }
+
+    const button = document.getElementById('login-submit');
+    button.disabled = true;
+    try {
+      await apiPost(setup ? '/api/auth/setup' : '/api/auth/login', { username, password });
+      goNext();
+    } catch (e) {
+      showError(e.message);
+      document.getElementById('password').value = '';
+      button.disabled = false;
+    }
+  });
+}
+
 
 /* ---------- projects.html: Danh sách project ---------- */
 function initProjectsPage() {
@@ -1229,6 +1338,7 @@ function initSettingsPage() {
 
 // Mỗi giá trị data-page ứng với 1 hàm khởi tạo
 const PAGE_INIT = {
+  login: initLoginPage,
   projects: initProjectsPage,
   project: initProjectPage,
   label: initLabelPage,
@@ -1250,6 +1360,7 @@ async function start() {
     showToast('Something went wrong: ' + error.message, 'error');
   }
   highlightSidebar();
+  initUser();
   initModals();
   initTabs();
   initToastButtons();

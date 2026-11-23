@@ -1279,7 +1279,27 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 
 .settings-actions { display: flex; justify-content: flex-end; gap: 10px; }
 
+/* ----- index.html: Đăng nhập (dùng chung nền với trang 404) ----- */
+.login-card { width: 400px; max-width: 100%; padding: 36px; }
+.login-logo { display: flex; justify-content: center; margin-bottom: 20px; }
+.login-logo .logo-mark { width: 44px; height: 44px; border-radius: 12px; }
+.login-logo .lucide { width: 22px; height: 22px; }
+.login-card h1 { text-align: center; font-size: 22px; }
+.login-sub { text-align: center; margin: 6px 0 28px; }
+.login-footer { text-align: center; margin-top: 24px; font-size: 13px; color: var(--text-muted); }
+
+/* Thông báo lỗi dưới form */
+.form-error {
+  margin-bottom: 14px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: #FEF2F2;
+  color: #B91C1C;
+  font-size: 13px;
+}
+
 /* ----- 404.html ----- */
+.auth-page,
 .error-page {
   min-height: 100vh;
   display: grid;
