@@ -96,7 +96,12 @@ python3 backend/app.py            # http://localhost:8000
 python3 backend/app.py --lan      # cho cả máy cùng mạng truy cập
 ```
 
-Một lệnh vừa phục vụ các trang web vừa cung cấp API (`/api/...`). Trên giao diện bạn có thể:
+Một lệnh vừa phục vụ các trang web vừa cung cấp API (`/api/...`).
+
+**Đăng nhập:** lần đầu mở web (database chưa có tài khoản nào) sẽ hiện form "Create the first account".
+Tài khoản này là admin. Từ lần sau, mọi trang đều yêu cầu đăng nhập bằng username + password
+(hết phiên thì tự quay về trang đăng nhập rồi trả bạn về đúng trang đang xem). Nút **Sign out** nằm ở sidebar.
+Sau khi đăng nhập, trên giao diện bạn có thể:
 
 - **New Project**: tạo project mới (lưu vào database).
 - **Upload** ở trang project: chọn cả folder ảnh từ máy mình (có thanh tiến độ), hoặc nhập đường dẫn
@@ -109,17 +114,30 @@ Không chạy backend thì giao diện vẫn mở được như trước (trốn
 
 | File | Làm gì |
 | --- | --- |
-| `backend/app.py` | Web server + API (FastAPI): project, upload, import, ảnh, thumbnail, trạng thái |
+| `backend/app.py` | Web server + API (FastAPI): đăng nhập, project, upload, import, ảnh, thumbnail, trạng thái |
+| `backend/auth.py` | Băm mật khẩu, tài khoản, phiên đăng nhập, khoá đăng nhập sai |
+| `backend/test_api.py` | Test API qua HTTP thật (đăng nhập, phân quyền, luồng chính) |
 
 Biến môi trường (không bắt buộc): `LABELKIT_DB` (file database), `LABELKIT_UPLOAD_DIR` (nơi lưu ảnh
 upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho import folder nằm trong thư mục này).
 
-**Lưu ý bảo mật:** hiện **chưa có đăng nhập**. Ai truy cập được địa chỉ web đều tạo project, upload
-và đổi trạng thái được; ô "import đường dẫn" cũng cho phép đăng ký bất kỳ folder ảnh nào trên máy chủ.
-Vì vậy chỉ dùng `--lan` ở mạng bạn tin tưởng, và nên đặt `LABELKIT_IMPORT_ROOT`.
-Server chỉ phục vụ đúng các trang HTML, `css/` và `js/`; file database và code backend không tải được qua web.
+**Bảo mật hiện có:**
+- Mật khẩu được băm bằng scrypt kèm muối, database không lưu mật khẩu thật. Mật khẩu tối thiểu 8 ký tự.
+- Mọi đường dẫn `/api/` đều yêu cầu đăng nhập, trừ vài đường dẫn công khai (`/api/health`, `/api/auth/...`).
+- Phiên đăng nhập dùng cookie `HttpOnly` + `SameSite=Lax` (JavaScript không đọc được cookie, trang web khác không gửi lệnh thay bạn được). Phiên hết hạn sau 14 ngày.
+- Đăng nhập sai 5 lần liên tiếp thì bị khoá vài phút. Thông báo lỗi giống nhau dù username có tồn tại hay không.
+- Trang `/docs` và `/openapi.json` của FastAPI đã tắt. Server chỉ phục vụ các trang HTML, `css/` và `js/`;
+  file database và code backend không tải được qua web.
 
-**Chưa có:** class, annotation (box/polygon), thành viên, export thật. Trang gán nhãn hiện chỉ xem ảnh
+**Còn cần lưu ý:**
+- **Lần chạy đầu:** ai mở trang web trước sẽ tạo được tài khoản admin. Khi dùng `--lan`, hãy tự mở trang và
+  tạo tài khoản ngay sau khi chạy server lần đầu, đừng để đó cho người khác trong mạng.
+- Chạy bằng HTTP thường thì mật khẩu đi qua mạng **không mã hoá**. Tạm chấp nhận được ở mạng nội bộ tin cậy;
+  khi cho người ở xa truy cập thì đặt phía sau HTTPS (Caddy hoặc Nginx) hoặc dùng VPN như Tailscale.
+- Ô "import đường dẫn" cho phép người đã đăng nhập đăng ký bất kỳ folder ảnh nào trên máy chủ. Nên đặt `LABELKIT_IMPORT_ROOT`.
+- Mọi tài khoản hiện thấy mọi project (chưa có phân quyền theo project). Chưa có đăng ký bằng email hay quên mật khẩu.
+
+**Chưa có:** class, annotation (box/polygon), phân quyền theo project, export thật. Trang gán nhãn hiện chỉ xem ảnh
 và đổi trạng thái; các thanh công cụ vẫn là giao diện mẫu.
 
 ## Cho người cùng mạng xem

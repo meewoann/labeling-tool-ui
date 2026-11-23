@@ -26,7 +26,7 @@ def percent(part, total):
 
 def cmd_init(conn, args):
     db.init_db(conn)
-    print(f"Đã tạo database tại: {db.DEFAULT_DB_PATH if args.db is None else args.db}")
+    print(f"Đã tạo database tại: {args.db or db.default_db_path()}")
 
 
 def cmd_project_add(conn, args):

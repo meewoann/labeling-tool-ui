@@ -45,3 +45,27 @@ CREATE TABLE IF NOT EXISTS images (
 -- Giúp lọc "ảnh chưa gán nhãn của project X" nhanh khi có hàng chục nghìn ảnh
 CREATE INDEX IF NOT EXISTS idx_images_project_status ON images (project_id, status);
 CREATE INDEX IF NOT EXISTS idx_images_folder         ON images (folder_id);
+
+-- ==========================================================
+-- Đăng nhập: users + sessions
+--   Hiện chỉ có username + password. Khi cần email thì thêm cột email vào users.
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS users (
+  id            INTEGER PRIMARY KEY AUTOINCREMENT,
+  username      TEXT NOT NULL UNIQUE COLLATE NOCASE,   -- "Alex" và "alex" là cùng 1 người
+  password_hash TEXT NOT NULL,                         -- KHÔNG BAO GIỜ lưu mật khẩu thật
+  is_admin      INTEGER NOT NULL DEFAULT 0 CHECK (is_admin IN (0, 1)),
+  created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- Mỗi lần đăng nhập tạo 1 phiên. Trình duyệt giữ "token"; DB chỉ giữ bản băm của token,
+-- nên ai đọc được file database cũng không dùng được các phiên đang đăng nhập.
+CREATE TABLE IF NOT EXISTS sessions (
+  token_hash  TEXT PRIMARY KEY,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  expires_at  TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);

@@ -2,12 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>LabelKit</title>
-  <!-- Chưa có đăng nhập: trang này chỉ chuyển thẳng sang projects.html -->
-  <meta http-equiv="refresh" content="0; url=projects.html">
-  <script>window.location.replace('projects.html');</script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign in · LabelKit</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2310B981'/%3E%3Crect x='9' y='9' width='14' height='14' rx='2' fill='none' stroke='white' stroke-width='3'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
 </head>
-<body>
-  <p><a href="projects.html">Go to projects</a></p>
+
+<!-- Trang đăng nhập: không có sidebar/topbar.
+     Không có backend (mở file trực tiếp) thì JS chuyển thẳng sang projects.html.
+     Database chưa có tài khoản nào thì JS đổi form thành "tạo tài khoản admin đầu tiên". -->
+<body data-page="login">
+  <div class="auth-page">
+    <div class="card login-card">
+      <div class="login-logo">
+        <span class="logo-mark"><i data-lucide="scan"></i></span>
+      </div>
+      <h1 id="login-title">Welcome back</h1>
+      <p class="login-sub text-muted" id="login-sub">Sign in to continue labeling your datasets</p>
+
+      <form id="login-form" novalidate>
+        <div class="form-group">
+          <label class="form-label" for="username">Username</label>
+          <input class="input" id="username" name="username" autocomplete="username" autocapitalize="off" spellcheck="false" autofocus>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="password">Password</label>
+          <input class="input" type="password" id="password" name="password" autocomplete="current-password">
+        </div>
+        <!-- Chỉ hiện khi tạo tài khoản đầu tiên -->
+        <div class="form-group" id="confirm-group" hidden>
+          <label class="form-label" for="password2">Confirm password</label>
+          <input class="input" type="password" id="password2" autocomplete="new-password">
+          <span class="form-hint">At least 8 characters.</span>
+        </div>
+
+        <p class="form-error" id="login-error" role="alert" hidden></p>
+
+        <button type="submit" class="btn btn-primary btn-block" id="login-submit">Sign in</button>
+      </form>
+
+      <p class="login-footer" id="login-footer">Forgot your password? Ask an admin to reset it.</p>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="js/app.js"></script>
 </body>
 </html>

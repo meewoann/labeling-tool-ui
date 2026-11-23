@@ -25,9 +25,11 @@ from PIL import Image  # chỉ dùng để đọc kích thước ảnh (không l
 BASE_DIR = Path(__file__).resolve().parent
 SCHEMA_FILE = BASE_DIR / "schema.sql"
 
-# File database mặc định: backend/data/labelkit.db
-# Muốn đổi chỗ thì đặt biến môi trường LABELKIT_DB=/duong/dan/khac.db
-DEFAULT_DB_PATH = Path(os.environ.get("LABELKIT_DB", BASE_DIR / "data" / "labelkit.db"))
+def default_db_path():
+    """File database mặc định: backend/data/labelkit.db.
+    Muốn đổi chỗ thì đặt biến môi trường LABELKIT_DB=/duong/dan/khac.db
+    (đọc mỗi lần gọi, nên test có thể đổi sang DB tạm mà không sợ ghi nhầm vào DB thật)."""
+    return Path(os.environ.get("LABELKIT_DB", BASE_DIR / "data" / "labelkit.db"))
 
 # Chỉ nhận các đuôi file ảnh này khi quét folder
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp", ".tif", ".tiff"}
@@ -38,7 +40,7 @@ STATUSES = ("unlabeled", "labeled", "review")
 
 def connect(db_path=None):
     """Mở kết nối tới database (tự tạo thư mục/file nếu chưa có)."""
-    path = Path(db_path or DEFAULT_DB_PATH)
+    path = Path(db_path or default_db_path())
     path.parent.mkdir(parents=True, exist_ok=True)
 
     conn = sqlite3.connect(path, check_same_thread=False)  # web server chạy request ở nhiều thread
