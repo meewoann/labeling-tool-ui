@@ -52,6 +52,20 @@ Open <http://localhost:8000> and create the first account. It becomes the admin 
 
 To let other machines on a trusted network use it, run `python3 backend/app.py --lan`. It prints the address to share.
 
+### With Docker
+
+```bash
+docker compose up -d --build
+```
+
+Then open <http://localhost:8000>. The database, uploaded images and thumbnails live in the `labelkit-data` volume, so they survive restarts and upgrades.
+
+- **Share on your network:** in `docker-compose.yml` change `"127.0.0.1:8000:8000"` to `"8000:8000"`. By default it is only reachable from the machine itself.
+- **Use images that are already on the host** without copying them: uncomment the read-only `/path/to/your/images:/images:ro` mount, then use *import from server path* with `/images/...` (and set `LABELKIT_IMPORT_ROOT: /images`).
+- **Back up:** `docker run --rm -v labelkit-data:/data -v "$PWD":/backup alpine tar czf /backup/labelkit-data.tgz -C /data .`
+- The container runs as a non-root user (uid 10001). If you replace the volume with a host folder, make it writable for that user: `sudo chown 10001 ./data`.
+- GitHub Actions builds the image and smoke-tests it on every push to `main` and every pull request.
+
 ## Configuration
 
 All optional, set as environment variables:
@@ -62,7 +76,7 @@ All optional, set as environment variables:
 | `LABELKIT_UPLOAD_DIR` | `backend/data/uploads` | Where uploaded images are stored |
 | `LABELKIT_IMPORT_ROOT` | *(unrestricted)* | Only allow "import from server path" inside this folder |
 
-Images are stored as plain files and the database only keeps their paths and status. Back up both.
+Images are stored as plain files and the database only keeps their paths and status. Back up both. The Docker image sets the first two to `/data/...` for you.
 
 ## Command line
 
@@ -76,6 +90,7 @@ python3 backend/cli.py user passwd alex      # reset a password, even if you are
 ## Project layout
 
 ```
+Dockerfile, docker-compose.yml   run it in a container
 index.html … settings.html   one HTML file per page
 css/style.css                all styles (colors are variables at the top)
 js/app.js                    all front-end code

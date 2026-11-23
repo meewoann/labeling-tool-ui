@@ -24,3 +24,60 @@ jobs:
       - name: Run backend tests
         working-directory: backend
         run: python -m unittest -v
+
+  # Builds the real image and checks it behaves: starts, serves the pages, hides
+  # the code and database, runs as non-root, and keeps its data across a restart.
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the compose file
+        run: docker compose config -q
+
+      - name: Build and start
+        run: docker compose up -d --build
+
+      - name: Wait until it answers
+        run: |
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8000/api/health && exit 0
+            sleep 1
+          done
+          echo "The container did not become ready"; exit 1
+
+      - name: Smoke test
+        run: |
+          set -e
+          curl -fsS http://127.0.0.1:8000/api/auth/status | grep -q '"needs_setup":true'
+          curl -fsS -o /dev/null http://127.0.0.1:8000/projects.html
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/backend/db.py)" = "404"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8000/api/projects)" = "401"
+          test "$(docker compose exec -T labelkit id -u)" != "0"
+          # the same command the image's HEALTHCHECK runs
+          docker compose exec -T labelkit python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+
+      - name: Create the first account
+        run: |
+          curl -fsS -o /dev/null -X POST http://127.0.0.1:8000/api/auth/setup \
+            -H 'Content-Type: application/json' \
+            -d '{"username":"ci-admin","password":"ci-password-1"}'
+
+      - name: Data survives removing and recreating the container
+        run: |
+          set -e
+          docker compose down
+          docker compose up -d
+          for i in $(seq 1 40); do
+            curl -fsS http://127.0.0.1:8000/api/health >/dev/null && break
+            sleep 1
+          done
+          curl -fsS http://127.0.0.1:8000/api/auth/status | grep -q '"needs_setup":false'
+
+      - name: Container logs
+        if: failure()
+        run: docker compose logs
+
+      - name: Clean up
+        if: always()
+        run: docker compose down -v
