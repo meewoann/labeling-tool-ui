@@ -8,6 +8,9 @@ Dockerfile
 .dockerignore
 docker-compose.yml
 
+# Tests are not needed at runtime
+backend/tests
+
 # Local data and caches (the database and uploads belong in the /data volume)
 backend/data
 **/__pycache__
