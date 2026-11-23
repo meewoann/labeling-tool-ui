@@ -130,6 +130,8 @@ upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho
   file database và code backend không tải được qua web.
 
 **Còn cần lưu ý:**
+- **Lần chạy đầu:** ai mở trang web trước sẽ tạo được tài khoản admin. Khi dùng `--lan`, hãy tự mở trang và
+  tạo tài khoản ngay sau khi chạy server lần đầu, đừng để đó cho người khác trong mạng.
 - Chạy bằng HTTP thường thì mật khẩu đi qua mạng **không mã hoá**. Tạm chấp nhận được ở mạng nội bộ tin cậy;
   khi cho người ở xa truy cập thì đặt phía sau HTTPS (Caddy hoặc Nginx) hoặc dùng VPN như Tailscale.
 - Ô "import đường dẫn" cho phép người đã đăng nhập đăng ký bất kỳ folder ảnh nào trên máy chủ. Nên đặt `LABELKIT_IMPORT_ROOT`.
