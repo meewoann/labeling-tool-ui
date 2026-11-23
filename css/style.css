@@ -1355,3 +1355,7 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 .upload-progress { margin-top: 16px; }
 .upload-progress .text-small { margin-top: 6px; }
 .path-row { display: flex; gap: 8px; }
+
+/* ----- Settings: tên người dùng, danh sách thành viên ----- */
+.profile-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+.list-row-actions { display: flex; gap: 6px; }

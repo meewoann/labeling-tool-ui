@@ -1329,6 +1329,152 @@ function initSettingsPage() {
     event.preventDefault();
     showToast('Settings saved');
   });
+
+  // Hồ sơ: người đang đăng nhập (không có backend thì hiện tài khoản mẫu "demo")
+  const username = CURRENT_USER ? CURRENT_USER.username : 'demo';
+  const isAdmin = CURRENT_USER ? CURRENT_USER.is_admin : true;
+  document.getElementById('profile-avatar').textContent = username.slice(0, 2).toUpperCase();
+  document.getElementById('profile-name').textContent = username;
+  document.getElementById('profile-role').textContent = isAdmin ? 'Admin' : 'Member';
+  document.getElementById('s-username').value = username;
+
+  // Đổi mật khẩu và quản lý người dùng cần backend
+  if (!API_MODE) return;
+  document.getElementById('account-settings').hidden = false;
+  initPasswordForm();
+  if (CURRENT_USER.is_admin) return initUserAdmin();
+}
+
+// Đổi mật khẩu của chính mình
+function initPasswordForm() {
+  const form = document.getElementById('password-form');
+  const error = document.getElementById('pw-error');
+
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    const current = document.getElementById('pw-current').value;
+    const next = document.getElementById('pw-new').value;
+
+    let problem = '';
+    if (!current || !next) problem = 'Fill in all the fields.';
+    else if (next !== document.getElementById('pw-confirm').value) problem = 'The new passwords do not match.';
+    if (problem) {
+      error.textContent = problem;
+      error.hidden = false;
+      return;
+    }
+
+    try {
+      await apiPost('/api/auth/password', { current_password: current, new_password: next });
+      form.reset();
+      showToast('Password updated. Your other devices were signed out.');
+    } catch (e) {
+      error.textContent = e.message;
+      error.hidden = false;
+    }
+  });
+}
+
+// Chỉ admin: xem danh sách, thêm người, đặt lại mật khẩu, xoá
+async function initUserAdmin() {
+  document.getElementById('section-users').hidden = false;
+  const list = document.getElementById('user-list');
+  let target = null; // người đang được đặt lại mật khẩu / chuẩn bị xoá: { id, name }
+
+  async function render() {
+    const users = await api('/api/users');
+    list.innerHTML = users.map(u => {
+      const isMe = u.id === CURRENT_USER.id;
+      // Không cho tự xoá mình hay tự reset ở đây (đổi mật khẩu của mình dùng mục Password bên trên)
+      const actions = isMe ? '<span class="badge">You</span>' : `
+        <span class="list-row-actions">
+          <button class="btn btn-ghost btn-sm" data-action="reset" data-id="${u.id}" data-name="${esc(u.username)}">
+            <i data-lucide="key-round"></i>Reset password</button>
+          <button class="btn btn-ghost btn-sm" data-action="delete" data-id="${u.id}" data-name="${esc(u.username)}">
+            <i data-lucide="trash-2"></i>Delete</button>
+        </span>`;
+      return `
+        <div class="list-row">
+          <span class="avatar">${esc(u.username.slice(0, 2).toUpperCase())}</span>
+          <div class="list-row-main">
+            <p class="list-row-title">${esc(u.username)}</p>
+            <p class="text-small text-muted">Added ${esc(timeAgo(u.created_at))}</p>
+          </div>
+          <span class="badge ${u.is_admin ? 'badge-green' : ''}">${u.is_admin ? 'Admin' : 'Member'}</span>
+          ${actions}
+        </div>`;
+    }).join('');
+    refreshIcons();
+  }
+
+  // Bấm nút trong danh sách (gắn 1 lần ở khung ngoài, nút nào được vẽ lại cũng chạy)
+  list.addEventListener('click', event => {
+    const btn = event.target.closest('[data-action]');
+    if (!btn) return;
+    target = { id: Number(btn.dataset.id), name: btn.dataset.name };
+    if (btn.dataset.action === 'reset') {
+      document.getElementById('reset-password-for').textContent = `Set a new password for ${target.name}.`;
+      document.getElementById('reset-new-password').value = '';
+      document.getElementById('reset-error').hidden = true;
+      openModal('modal-reset-password');
+    } else {
+      document.getElementById('delete-user-text').textContent =
+        `${target.name} will be signed out and cannot sign in again. The projects and images stay.`;
+      openModal('modal-delete-user');
+    }
+  });
+
+  // Đặt lại mật khẩu
+  document.getElementById('reset-password-form').addEventListener('submit', async event => {
+    event.preventDefault();
+    const error = document.getElementById('reset-error');
+    try {
+      await apiPost(`/api/users/${target.id}/password`, { new_password: document.getElementById('reset-new-password').value });
+      closeModal(document.getElementById('modal-reset-password'));
+      showToast(`Password reset for ${target.name}`);
+    } catch (e) {
+      error.textContent = e.message;
+      error.hidden = false;
+    }
+  });
+
+  // Xoá tài khoản
+  document.getElementById('btn-confirm-delete-user').addEventListener('click', async () => {
+    try {
+      await api(`/api/users/${target.id}`, { method: 'DELETE' });
+      closeModal(document.getElementById('modal-delete-user'));
+      showToast(`Deleted ${target.name}`);
+      await render();
+    } catch (e) {
+      closeModal(document.getElementById('modal-delete-user'));
+      showToast(e.message, 'error');
+    }
+  });
+
+  // Thêm người mới
+  const form = document.getElementById('add-user-form');
+  const error = document.getElementById('nu-error');
+  form.addEventListener('submit', async event => {
+    event.preventDefault();
+    error.hidden = true;
+    const name = document.getElementById('nu-username').value.trim();
+    try {
+      await apiPost('/api/users', {
+        username: name,
+        password: document.getElementById('nu-password').value,
+        is_admin: document.getElementById('nu-admin').checked,
+      });
+      form.reset();
+      showToast(`Added ${name}`);
+      await render();
+    } catch (e) {
+      error.textContent = e.message;
+      error.hidden = false;
+    }
+  });
+
+  await render();
 }
 
 

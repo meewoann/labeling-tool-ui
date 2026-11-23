@@ -14,10 +14,11 @@ Biến môi trường (không bắt buộc):
 Mục lục:
   1. Cấu hình & helper
   2. Đăng nhập
-  3. Project
-  4. Import / upload folder ảnh
-  5. Ảnh: danh sách, trạng thái, file, thumbnail
-  6. Phục vụ trang web & chạy server
+  3. Tài khoản: đổi mật khẩu, quản lý người dùng
+  4. Project
+  5. Import / upload folder ảnh
+  6. Ảnh: danh sách, trạng thái, file, thumbnail
+  7. Phục vụ trang web & chạy server
 """
 
 import os
@@ -214,7 +215,95 @@ def auth_me(request: Request):
 
 
 # ==========================================================
-# 3. PROJECT
+# 3. TÀI KHOẢN: ĐỔI MẬT KHẨU, QUẢN LÝ NGƯỜI DÙNG
+# ==========================================================
+# Lưu ý: sai mật khẩu hiện tại trả 400, KHÔNG trả 401, vì giao diện coi 401 là "hết phiên đăng nhập"
+# và sẽ đá người dùng về trang đăng nhập.
+
+class PasswordChangeIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class NewUserIn(BaseModel):
+    username: str
+    password: str
+    is_admin: bool = False
+
+
+class ResetPasswordIn(BaseModel):
+    new_password: str
+
+
+def require_admin(request: Request):
+    user = getattr(request.state, "user", None)
+    if user is None:
+        raise HTTPException(401, "Not logged in")
+    if not user["is_admin"]:
+        raise HTTPException(403, "Only admins can do this")
+
+
+@app.post("/api/auth/password")
+def change_my_password(body: PasswordChangeIn, request: Request, conn=Depends(get_conn)):
+    """Người đang đăng nhập tự đổi mật khẩu. Các thiết bị khác bị đăng xuất, thiết bị này giữ nguyên."""
+    user = request.state.user
+    ip = request.client.host if request.client else "unknown"
+    # Dùng chung bộ đếm với đăng nhập: có người cầm được phiên của bạn cũng không thể đoán mật khẩu hiện tại vô hạn
+    if login_limiter.is_blocked(user["username"], ip):
+        raise HTTPException(429, "Too many failed attempts. Please try again in a few minutes.")
+    if auth.authenticate(conn, user["username"], body.current_password) is None:
+        login_limiter.record_failure(user["username"], ip)
+        raise HTTPException(400, "Current password is wrong")
+    login_limiter.reset(user["username"], ip)
+    try:
+        auth.set_password(conn, user["id"], body.new_password, keep_token=request.state.token)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return {"ok": True}
+
+
+@app.get("/api/users", dependencies=[Depends(require_admin)])
+def list_users(conn=Depends(get_conn)):
+    return [{**dict(u), "is_admin": bool(u["is_admin"])} for u in auth.list_users(conn)]
+
+
+@app.post("/api/users", status_code=201, dependencies=[Depends(require_admin)])
+def create_user(body: NewUserIn, conn=Depends(get_conn)):
+    if auth.find_user(conn, body.username):
+        raise HTTPException(409, f"Username '{body.username}' already exists")
+    try:
+        user_id = auth.create_user(conn, body.username, body.password, is_admin=body.is_admin)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    user = auth.get_user(conn, user_id)
+    return {**dict(user), "is_admin": bool(user["is_admin"])}
+
+
+@app.post("/api/users/{user_id}/password", dependencies=[Depends(require_admin)])
+def reset_user_password(user_id: int, body: ResetPasswordIn, conn=Depends(get_conn)):
+    """Admin đặt lại mật khẩu cho người khác (họ bị đăng xuất khỏi mọi thiết bị)."""
+    try:
+        auth.set_password(conn, user_id, body.new_password)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    return {"ok": True}
+
+
+@app.delete("/api/users/{user_id}", dependencies=[Depends(require_admin)])
+def delete_user(user_id: int, request: Request, conn=Depends(get_conn)):
+    if user_id == request.state.user["id"]:
+        raise HTTPException(400, "You cannot delete your own account")
+    try:
+        auth.delete_user(conn, user_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    return {"ok": True}
+
+
+# ==========================================================
+# 4. PROJECT
 # ==========================================================
 
 class ProjectIn(BaseModel):
@@ -249,7 +338,7 @@ def get_project(project_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 4. IMPORT / UPLOAD FOLDER ẢNH
+# 5. IMPORT / UPLOAD FOLDER ẢNH
 # ==========================================================
 
 class ImportIn(BaseModel):
@@ -323,7 +412,7 @@ def upload_finish(project_id: int, body: FinishIn, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 5. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
+# 6. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
 # ==========================================================
 
 class StatusIn(BaseModel):
@@ -400,7 +489,7 @@ def image_thumb(image_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 6. PHỤC VỤ TRANG WEB & CHẠY SERVER
+# 7. PHỤC VỤ TRANG WEB & CHẠY SERVER
 # ==========================================================
 
 @app.middleware("http")

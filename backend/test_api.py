@@ -269,5 +269,90 @@ class LoginTests(ApiTestCase):
         self.assertEqual(self.anon.get(f"/api/images/{image_id}/thumb")[0], 401)
 
 
+class UserManagementTests(ApiTestCase):
+    def make_member(self, admin, name, password="password123"):
+        """Admin tạo thành viên thường rồi trả về Client đã đăng nhập bằng tài khoản đó."""
+        self.assertEqual(admin.post("/api/users", {"username": name, "password": password})[0], 201)
+        member = Client(self.base)
+        self.assertEqual(member.post("/api/auth/login", {"username": name, "password": password})[0], 200)
+        return member
+
+    def test_only_admins_can_manage_users(self):
+        admin = self.make_admin_client("um-admin1")
+        member = self.make_member(admin, "um-member1")
+        calls = [("GET", "/api/users", None), ("POST", "/api/users", {"username": "x-user", "password": "password123"}),
+                 ("POST", "/api/users/1/password", {"new_password": "password456"}), ("DELETE", "/api/users/1", None)]
+        for method, path, body in calls:
+            self.assertEqual(member.request(method, path, body=body)[0], 403, f"member: {method} {path}")
+            self.assertEqual(self.anon.request(method, path, body=body)[0], 401, f"anonymous: {method} {path}")
+        self.assertEqual(admin.get("/api/users")[0], 200)
+
+    def test_admin_creates_user(self):
+        admin = self.make_admin_client("um-admin2")
+        status, user, _ = admin.post("/api/users", {"username": "newbie", "password": "password123", "is_admin": False})
+        self.assertEqual((status, user["username"], user["is_admin"]), (201, "newbie", False))
+        self.assertNotIn("password", json.dumps(user))
+        self.assertEqual(admin.post("/api/users", {"username": "NEWBIE", "password": "password123"})[0], 409)   # trùng, không phân biệt hoa thường
+        self.assertEqual(admin.post("/api/users", {"username": "ab", "password": "password123"})[0], 400)       # username xấu
+        self.assertEqual(admin.post("/api/users", {"username": "weakpass", "password": "short"})[0], 400)       # mật khẩu yếu
+        names = [u["username"] for u in admin.get("/api/users")[1]]
+        self.assertIn("newbie", names)
+        self.assertNotIn("weakpass", names)
+        self.assertNotIn("password_hash", json.dumps(admin.get("/api/users")[1]))   # không bao giờ trả bản băm ra ngoài
+
+        # Thành viên mới đăng nhập được nhưng không phải admin
+        newbie = Client(self.base)
+        status, body, _ = newbie.post("/api/auth/login", {"username": "newbie", "password": "password123"})
+        self.assertEqual((status, body["is_admin"]), (200, False))
+
+    def test_change_own_password(self):
+        admin = self.make_admin_client("um-admin3")
+        user = self.make_member(admin, "changer")
+        other_device = Client(self.base)
+        other_device.post("/api/auth/login", {"username": "changer", "password": "password123"})
+
+        # Sai mật khẩu hiện tại → 400 (không phải 401, vì 401 làm giao diện tưởng hết phiên)
+        self.assertEqual(user.post("/api/auth/password", {"current_password": "wrong-one", "new_password": "password456"})[0], 400)
+        # Mật khẩu mới quá yếu
+        self.assertEqual(user.post("/api/auth/password", {"current_password": "password123", "new_password": "short"})[0], 400)
+        self.assertEqual(user.post("/api/auth/password", {"current_password": "password123", "new_password": "password456"})[0], 200)
+
+        self.assertEqual(user.get("/api/auth/me")[0], 200)            # thiết bị đang đổi vẫn đăng nhập
+        self.assertEqual(other_device.get("/api/auth/me")[0], 401)    # thiết bị khác bị đăng xuất
+        self.assertEqual(Client(self.base).post("/api/auth/login", {"username": "changer", "password": "password123"})[0], 401)
+        self.assertEqual(Client(self.base).post("/api/auth/login", {"username": "changer", "password": "password456"})[0], 200)
+
+    def test_change_password_cannot_be_bruteforced(self):
+        admin = self.make_admin_client("um-admin4")
+        user = self.make_member(admin, "bruteforced")
+        for _ in range(5):
+            self.assertEqual(user.post("/api/auth/password", {"current_password": "guess-guess", "new_password": "password456"})[0], 400)
+        status, _, _ = user.post("/api/auth/password", {"current_password": "password123", "new_password": "password456"})
+        self.assertEqual(status, 429)
+
+    def test_admin_resets_password(self):
+        admin = self.make_admin_client("um-admin5")
+        victim = self.make_member(admin, "forgetful")
+        victim_id = next(u["id"] for u in admin.get("/api/users")[1] if u["username"] == "forgetful")
+        self.assertEqual(admin.post(f"/api/users/{victim_id}/password", {"new_password": "short"})[0], 400)
+        self.assertEqual(admin.post("/api/users/99999/password", {"new_password": "password456"})[0], 404)
+        self.assertEqual(admin.post(f"/api/users/{victim_id}/password", {"new_password": "password456"})[0], 200)
+        self.assertEqual(victim.get("/api/auth/me")[0], 401)           # bị đăng xuất khỏi mọi thiết bị
+        self.assertEqual(Client(self.base).post("/api/auth/login", {"username": "forgetful", "password": "password123"})[0], 401)
+        self.assertEqual(Client(self.base).post("/api/auth/login", {"username": "forgetful", "password": "password456"})[0], 200)
+
+    def test_admin_deletes_user(self):
+        admin = self.make_admin_client("um-admin6")
+        doomed = self.make_member(admin, "doomed")
+        users = {u["username"]: u["id"] for u in admin.get("/api/users")[1]}
+        self.assertEqual(admin.request("DELETE", f"/api/users/{users['um-admin6']}")[0], 400)   # không tự xoá mình
+        self.assertEqual(admin.get("/api/auth/me")[0], 200)
+        self.assertEqual(admin.request("DELETE", "/api/users/99999")[0], 404)
+        self.assertEqual(admin.request("DELETE", f"/api/users/{users['doomed']}")[0], 200)
+        self.assertEqual(doomed.get("/api/auth/me")[0], 401)           # phiên của họ biến mất ngay
+        self.assertEqual(Client(self.base).post("/api/auth/login", {"username": "doomed", "password": "password123"})[0], 401)
+        self.assertNotIn("doomed", [u["username"] for u in admin.get("/api/users")[1]])
+
+
 if __name__ == "__main__":
     unittest.main()

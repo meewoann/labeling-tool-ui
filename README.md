@@ -101,6 +101,14 @@ Một lệnh vừa phục vụ các trang web vừa cung cấp API (`/api/...`).
 **Đăng nhập:** lần đầu mở web (database chưa có tài khoản nào) sẽ hiện form "Create the first account".
 Tài khoản này là admin. Từ lần sau, mọi trang đều yêu cầu đăng nhập bằng username + password
 (hết phiên thì tự quay về trang đăng nhập rồi trả bạn về đúng trang đang xem). Nút **Sign out** nằm ở sidebar.
+Quản lý tài khoản (trang **Settings**):
+
+- **Password**: tự đổi mật khẩu (các thiết bị khác bị đăng xuất).
+- **Team** (chỉ admin thấy): thêm người mới bằng username + mật khẩu tạm, đặt lại mật khẩu cho người quên, xoá tài khoản.
+  Người mới đăng nhập rồi tự đổi mật khẩu của mình. Không có tự đăng ký: chỉ admin mới tạo được tài khoản.
+- Không vào được web (ví dụ admin quên mật khẩu)? Dùng dòng lệnh: `python3 backend/cli.py user passwd <username>`.
+  Các lệnh khác: `user add <username> [--admin]`, `user list`, `user delete <username>`.
+
 Sau khi đăng nhập, trên giao diện bạn có thể:
 
 - **New Project**: tạo project mới (lưu vào database).
@@ -135,7 +143,7 @@ upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho
 - Chạy bằng HTTP thường thì mật khẩu đi qua mạng **không mã hoá**. Tạm chấp nhận được ở mạng nội bộ tin cậy;
   khi cho người ở xa truy cập thì đặt phía sau HTTPS (Caddy hoặc Nginx) hoặc dùng VPN như Tailscale.
 - Ô "import đường dẫn" cho phép người đã đăng nhập đăng ký bất kỳ folder ảnh nào trên máy chủ. Nên đặt `LABELKIT_IMPORT_ROOT`.
-- Mọi tài khoản hiện thấy mọi project (chưa có phân quyền theo project). Chưa có đăng ký bằng email hay quên mật khẩu.
+- Mọi tài khoản hiện thấy mọi project (chưa có phân quyền theo project). Chưa có email, đăng ký tự do hay "quên mật khẩu" tự động (admin đặt lại giúp).
 
 **Chưa có:** class, annotation (box/polygon), phân quyền theo project, export thật. Trang gán nhãn hiện chỉ xem ảnh
 và đổi trạng thái; các thanh công cụ vẫn là giao diện mẫu.
