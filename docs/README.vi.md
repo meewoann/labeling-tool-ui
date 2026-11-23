@@ -150,6 +150,18 @@ upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho
 **Chưa có:** class, annotation (box/polygon), phân quyền theo project, export thật. Trang gán nhãn hiện chỉ xem ảnh
 và đổi trạng thái; các thanh công cụ vẫn là giao diện mẫu.
 
+## Chạy bằng Docker
+
+```bash
+docker compose up -d --build
+```
+
+Mở http://localhost:8000. Database, ảnh upload và thumbnail nằm trong volume `labelkit-data` nên không mất khi khởi động lại.
+Mặc định chỉ máy chạy Docker truy cập được; muốn cho cả mạng, sửa `"127.0.0.1:8000:8000"` thành `"8000:8000"` trong
+`docker-compose.yml` (chỉ làm ở mạng tin cậy). Muốn dùng ảnh đã có sẵn trên máy mà không copy, bỏ comment dòng mount
+`/path/to/your/images:/images:ro` rồi dùng "import từ đường dẫn trên máy chủ" với `/images/...`.
+Chi tiết (sao lưu, quyền ghi thư mục) xem [README tiếng Anh](../README.md#with-docker).
+
 ## Cho người cùng mạng xem
 
 ```bash
