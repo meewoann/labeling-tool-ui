@@ -1,0 +1,4 @@
+# File database và cache Python — không đưa lên git
+backend/data/
+__pycache__/
+*.pyc

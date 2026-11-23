@@ -33,6 +33,7 @@ Giao diện được thiết kế cho màn hình rộng từ 1280px trở lên.
 labeling-tool-ui/
 ├── index.html … 404.html   Mỗi trang là 1 file HTML. Sidebar và top bar được copy y hệt vào từng file
 ├── serve.py                Chạy server nhỏ: python3 serve.py rồi mở http://localhost:8000
+├── backend/                Database lưu folder ảnh + trạng thái (xem mục "Database" bên dưới)
 ├── css/style.css           Toàn bộ CSS. Biến màu (--primary, --bg, --text…) nằm ở đầu file
 ├── js/app.js               Toàn bộ JavaScript (xem mục lục ở đầu file)
 └── README.md
@@ -60,3 +61,39 @@ Một số quy ước trong HTML mà `app.js` dựa vào:
 
 `V` Select · `B` Bounding box · `P` Polygon · `H` Pan · `Z` Zoom · `←` `→` đổi ảnh ·
 `1`–`9` chọn class · `Ctrl+S` Save · `?` xem phím tắt · `/` nhảy vào ô search
+
+## Database (backend/)
+
+Lưu **folder ảnh** và **trạng thái từng ảnh** (`unlabeled` / `labeled` / `review`).
+Dùng SQLite nên không cần cài gì thêm ngoài Python và thư viện Pillow
+(`pip install -r backend/requirements.txt`). Toàn bộ DB là 1 file `backend/data/labelkit.db`
+(file này không được đưa lên git).
+
+| File | Làm gì |
+| --- | --- |
+| `backend/schema.sql` | Cấu trúc 3 bảng: `projects` → `folders` → `images` |
+| `backend/db.py` | Mọi hàm làm việc với DB: tạo project, import folder, đổi trạng thái, thống kê |
+| `backend/cli.py` | Dùng DB từ dòng lệnh |
+| `backend/test_db.py` | Test tự động (`cd backend && python3 -m unittest -v`) |
+
+DB chỉ nhớ **đường dẫn** tới folder ảnh trên máy chủ, không copy ảnh. Vì vậy đừng đổi tên
+hoặc di chuyển folder sau khi đã import. Import lại cùng một folder chỉ thêm những ảnh mới,
+ảnh cũ giữ nguyên trạng thái.
+
+```bash
+python3 backend/cli.py project add "Street Traffic"
+python3 backend/cli.py import "Street Traffic" /duong/dan/folder_anh
+python3 backend/cli.py stats "Street Traffic"
+python3 backend/cli.py images "Street Traffic" --status unlabeled --limit 20
+python3 backend/cli.py status 5 labeled          # đổi trạng thái ảnh có id = 5
+```
+
+Giao diện web hiện **chưa** nối với database này.
+
+## Cho người cùng mạng xem
+
+```bash
+python3 serve.py --lan
+```
+
+Terminal sẽ in ra link dạng `http://192.168.x.x:8000` để gửi cho người cùng mạng.
