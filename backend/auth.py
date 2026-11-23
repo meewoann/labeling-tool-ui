@@ -133,6 +133,20 @@ def find_user(conn, username):
     return conn.execute("SELECT * FROM users WHERE username = ?", (username,)).fetchone()
 
 
+def get_user(conn, user_id):
+    return conn.execute(
+        "SELECT id, username, is_admin, created_at FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+
+
+def delete_user(conn, user_id):
+    """Xoá tài khoản (các phiên đăng nhập của họ tự bị xoá theo). Project/ảnh họ đã làm vẫn còn."""
+    with conn:
+        deleted = conn.execute("DELETE FROM users WHERE id = ?", (user_id,)).rowcount
+    if deleted == 0:
+        raise LookupError("Không tìm thấy user")
+
+
 def authenticate(conn, username, password):
     """Đúng username + password thì trả về dòng user, sai thì trả về None."""
     user = find_user(conn, username)

@@ -11,12 +11,20 @@ Ví dụ:
     python3 backend/cli.py status 5 labeled          # đổi ảnh có id=5
     python3 backend/cli.py stats "Street Traffic"
 
+Tài khoản (hỏi mật khẩu trực tiếp, không gõ mật khẩu vào lệnh để khỏi lọt vào lịch sử terminal):
+    python3 backend/cli.py user add alex --admin
+    python3 backend/cli.py user list
+    python3 backend/cli.py user passwd alex          # đặt lại mật khẩu (cứu hộ khi admin quên mật khẩu)
+    python3 backend/cli.py user delete alex
+
 Dùng file DB khác:  --db /duong/dan/file.db  (hoặc đặt biến môi trường LABELKIT_DB)
 """
 
 import argparse
+import getpass
 import sys
 
+import auth
 import db
 
 
@@ -91,6 +99,45 @@ def cmd_stats(conn, args):
     print(f"  Chờ review : {s['review']}")
 
 
+def read_password(args):
+    """Lấy mật khẩu: hỏi trực tiếp (không hiện chữ), hoặc đọc 1 dòng từ stdin nếu có --password-stdin."""
+    if args.password_stdin:
+        return sys.stdin.readline().rstrip("\n")
+    password = getpass.getpass("Password: ")
+    if password != getpass.getpass("Confirm password: "):
+        raise ValueError("Hai lần nhập mật khẩu không giống nhau")
+    return password
+
+
+def cmd_user_add(conn, args):
+    user_id = auth.create_user(conn, args.username, read_password(args), is_admin=args.admin)
+    print(f"Đã tạo tài khoản #{user_id}: {args.username}{' (admin)' if args.admin else ''}")
+
+
+def cmd_user_list(conn, args):
+    users = auth.list_users(conn)
+    if not users:
+        print("Chưa có tài khoản nào. Tạo bằng: user add <username> --admin (hoặc mở trang web để tạo admin đầu tiên)")
+    for u in users:
+        print(f"#{u['id']:<3} {u['username']:<24} {'admin' if u['is_admin'] else 'member':<7} {u['created_at']}")
+
+
+def cmd_user_passwd(conn, args):
+    user = auth.find_user(conn, args.username)
+    if user is None:
+        raise LookupError(f"Không tìm thấy user '{args.username}'")
+    auth.set_password(conn, user["id"], read_password(args))
+    print(f"Đã đổi mật khẩu của '{user['username']}'. Họ bị đăng xuất khỏi mọi thiết bị.")
+
+
+def cmd_user_delete(conn, args):
+    user = auth.find_user(conn, args.username)
+    if user is None:
+        raise LookupError(f"Không tìm thấy user '{args.username}'")
+    auth.delete_user(conn, user["id"])
+    print(f"Đã xoá tài khoản '{user['username']}'.")
+
+
 def build_parser():
     parser = argparse.ArgumentParser(description="LabelKit database CLI")
     parser.add_argument("--db", help="đường dẫn file database (mặc định backend/data/labelkit.db)")
@@ -126,6 +173,22 @@ def build_parser():
     p_status.add_argument("image_ids", type=int, nargs="+", metavar="image_id")
     p_status.add_argument("status", choices=db.STATUSES)
     p_status.set_defaults(func=cmd_status)
+
+    p_user = sub.add_parser("user", help="quản lý tài khoản")
+    p_user_sub = p_user.add_subparsers(dest="action", required=True)
+    p_uadd = p_user_sub.add_parser("add", help="tạo tài khoản")
+    p_uadd.add_argument("username")
+    p_uadd.add_argument("--admin", action="store_true", help="cho quyền admin")
+    p_uadd.add_argument("--password-stdin", action="store_true", help="đọc mật khẩu từ stdin (dùng trong script)")
+    p_uadd.set_defaults(func=cmd_user_add)
+    p_user_sub.add_parser("list", help="liệt kê tài khoản").set_defaults(func=cmd_user_list)
+    p_upasswd = p_user_sub.add_parser("passwd", help="đặt lại mật khẩu")
+    p_upasswd.add_argument("username")
+    p_upasswd.add_argument("--password-stdin", action="store_true")
+    p_upasswd.set_defaults(func=cmd_user_passwd)
+    p_udel = p_user_sub.add_parser("delete", help="xoá tài khoản")
+    p_udel.add_argument("username")
+    p_udel.set_defaults(func=cmd_user_delete)
 
     p_stats = sub.add_parser("stats", help="thống kê project")
     p_stats.add_argument("project")
