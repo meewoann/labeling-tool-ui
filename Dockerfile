@@ -24,7 +24,7 @@ COPY js js
 COPY *.html ./
 
 # Do not run as root
-RUN useradd --system --uid 10001 --no-create-home labelkit \
+RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin labelkit \
     && mkdir /data \
     && chown labelkit /data
 USER labelkit
