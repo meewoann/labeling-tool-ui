@@ -5,6 +5,7 @@ Chạy:
     python3 backend/app.py              # chỉ máy này truy cập được, http://localhost:8000
     python3 backend/app.py --lan        # cho cả máy khác CÙNG MẠNG truy cập
     python3 backend/app.py 9000 --lan   # đổi cổng
+    python3 backend/app.py --no-browser # không tự mở trình duyệt (dùng trong Docker / trên server)
 
 Biến môi trường (không bắt buộc):
     LABELKIT_DB           đường dẫn file database      (mặc định backend/data/labelkit.db)
@@ -531,6 +532,7 @@ if __name__ == "__main__":
 
     args = sys.argv[1:]
     lan = "--lan" in args
+    open_browser = "--no-browser" not in args
     numbers = [a for a in args if a.isdigit()]
     port = int(numbers[0]) if numbers else 8000
 
@@ -549,5 +551,6 @@ if __name__ == "__main__":
         except OSError:
             pass
         print("Chế độ --lan: bất kỳ ai trong mạng này đều dùng và upload được. Chỉ dùng ở mạng bạn tin tưởng.")
-    threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
+    if open_browser:
+        threading.Timer(1.0, lambda: webbrowser.open(f"http://localhost:{port}")).start()
     uvicorn.run(app, host="0.0.0.0" if lan else "127.0.0.1", port=port)
