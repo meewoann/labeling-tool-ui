@@ -13,10 +13,11 @@ Biến môi trường (không bắt buộc):
 
 Mục lục:
   1. Cấu hình & helper
-  2. Project
-  3. Import / upload folder ảnh
-  4. Ảnh: danh sách, trạng thái, file, thumbnail
-  5. Phục vụ trang web & chạy server
+  2. Đăng nhập
+  3. Project
+  4. Import / upload folder ảnh
+  5. Ảnh: danh sách, trạng thái, file, thumbnail
+  6. Phục vụ trang web & chạy server
 """
 
 import os
@@ -25,12 +26,13 @@ import sys
 from pathlib import Path, PurePosixPath
 from typing import List, Optional
 
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from pydantic import BaseModel
 
+import auth
 import db
 
 
@@ -58,17 +60,46 @@ def thumb_dir():
 def import_root():
     return os.environ.get("LABELKIT_IMPORT_ROOT")      # None = không giới hạn
 
-app = FastAPI(title="LabelKit API")
+COOKIE_NAME = "labelkit_session"
+
+# Các đường dẫn /api/ được dùng khi CHƯA đăng nhập. Mọi đường dẫn /api/ khác đều bị chặn mặc định,
+# nên sau này thêm endpoint mới mà quên khoá thì vẫn an toàn.
+PUBLIC_API = {"/api/health", "/api/auth/status", "/api/auth/setup", "/api/auth/login", "/api/auth/logout"}
+
+login_limiter = auth.LoginLimiter()   # khoá tạm khi đăng nhập sai nhiều lần
+_initialized_dbs = set()              # các file DB đã tạo bảng, để không chạy lại schema ở mỗi request
 
 
 def get_conn():
     """Mỗi request dùng 1 kết nối DB riêng, xong thì đóng."""
     conn = db.connect()
-    db.init_db(conn)
+    path = str(db.default_db_path())
+    if path not in _initialized_dbs:
+        db.init_db(conn)
+        _initialized_dbs.add(path)
     try:
         yield conn
     finally:
         conn.close()
+
+
+def require_login(request: Request, conn=Depends(get_conn)):
+    """Chạy trước MỌI request. /api/ nào không nằm trong PUBLIC_API thì phải đang đăng nhập."""
+    path = request.url.path
+    if not path.startswith("/api/") or path in PUBLIC_API:
+        return
+    token = request.cookies.get(COOKIE_NAME)
+    user = auth.get_user_by_token(conn, token)
+    if user is None:
+        raise HTTPException(401, "Not logged in")
+    request.state.user = user
+    request.state.token = token
+
+
+# docs_url/redoc_url/openapi_url = None: tắt trang tài liệu API tự động của FastAPI,
+# vì nó công khai (không cần đăng nhập) và liệt kê toàn bộ API.
+app = FastAPI(title="LabelKit API", dependencies=[Depends(require_login)],
+              docs_url=None, redoc_url=None, openapi_url=None)
 
 
 def get_project_or_404(conn, project_id):
@@ -106,7 +137,84 @@ def check_import_root(folder):
 
 
 # ==========================================================
-# 2. PROJECT
+# 2. ĐĂNG NHẬP
+# ==========================================================
+
+class CredentialsIn(BaseModel):
+    username: str
+    password: str
+
+
+def user_json(user):
+    return {"id": user["id"], "username": user["username"], "is_admin": bool(user["is_admin"])}
+
+
+def start_session(request: Request, response: Response, conn, user_id):
+    """Tạo phiên và gửi token cho trình duyệt qua cookie.
+    HttpOnly: JavaScript không đọc được cookie (chống đánh cắp qua XSS).
+    SameSite=Lax: trang web khác không thể gửi lệnh POST kèm cookie của bạn (chống CSRF)."""
+    token = auth.create_session(conn, user_id)
+    response.set_cookie(
+        COOKIE_NAME, token,
+        max_age=auth.SESSION_DAYS * 86400, httponly=True, samesite="lax",
+        secure=request.url.scheme == "https", path="/",
+    )
+
+
+@app.get("/api/auth/status")
+def auth_status(request: Request, conn=Depends(get_conn)):
+    """Trang đăng nhập hỏi: đã có tài khoản nào chưa? Mình đã đăng nhập chưa?"""
+    user = auth.get_user_by_token(conn, request.cookies.get(COOKIE_NAME))
+    return {"needs_setup": auth.count_users(conn) == 0, "user": user_json(user) if user else None}
+
+
+@app.post("/api/auth/setup")
+def auth_setup(body: CredentialsIn, request: Request, response: Response, conn=Depends(get_conn)):
+    """Tạo tài khoản admin đầu tiên. Chỉ chạy được khi database chưa có user nào."""
+    try:
+        user_id = auth.create_first_admin(conn, body.username, body.password)
+    except PermissionError as error:
+        raise HTTPException(403, str(error))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    start_session(request, response, conn, user_id)
+    return user_json(conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone())
+
+
+@app.post("/api/auth/login")
+def auth_login(body: CredentialsIn, request: Request, response: Response, conn=Depends(get_conn)):
+    ip = request.client.host if request.client else "unknown"
+    if login_limiter.is_blocked(body.username, ip):
+        raise HTTPException(429, "Too many failed attempts. Please try again in a few minutes.")
+
+    too_long = len(body.username) > 64 or len(body.password) > 1024
+    user = None if too_long else auth.authenticate(conn, body.username, body.password)
+    if user is None:
+        login_limiter.record_failure(body.username, ip)
+        # Cùng 1 câu trả lời dù username không tồn tại hay mật khẩu sai (không để lộ username nào có thật)
+        raise HTTPException(401, "Wrong username or password")
+
+    login_limiter.reset(body.username, ip)
+    start_session(request, response, conn, user["id"])
+    return user_json(user)
+
+
+@app.post("/api/auth/logout")
+def auth_logout(request: Request, response: Response, conn=Depends(get_conn)):
+    token = request.cookies.get(COOKIE_NAME)
+    if token:
+        auth.delete_session(conn, token)
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return {"ok": True}
+
+
+@app.get("/api/auth/me")
+def auth_me(request: Request):
+    return user_json(request.state.user)
+
+
+# ==========================================================
+# 3. PROJECT
 # ==========================================================
 
 class ProjectIn(BaseModel):
@@ -141,7 +249,7 @@ def get_project(project_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 3. IMPORT / UPLOAD FOLDER ẢNH
+# 4. IMPORT / UPLOAD FOLDER ẢNH
 # ==========================================================
 
 class ImportIn(BaseModel):
@@ -215,7 +323,7 @@ def upload_finish(project_id: int, body: FinishIn, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 4. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
+# 5. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
 # ==========================================================
 
 class StatusIn(BaseModel):
@@ -292,7 +400,7 @@ def image_thumb(image_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 5. PHỤC VỤ TRANG WEB & CHẠY SERVER
+# 6. PHỤC VỤ TRANG WEB & CHẠY SERVER
 # ==========================================================
 
 @app.middleware("http")
@@ -339,6 +447,11 @@ if __name__ == "__main__":
 
     print(f"Database: {db.default_db_path()}")
     print(f"Mở: http://localhost:{port}")
+    _conn = db.connect()
+    db.init_db(_conn)
+    if auth.count_users(_conn) == 0:
+        print("Chưa có tài khoản nào: mở trang web để tạo tài khoản admin đầu tiên.")
+    _conn.close()
     if lan:
         try:  # lấy IP của máy trong mạng nội bộ (không gửi dữ liệu ra ngoài)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
