@@ -543,7 +543,8 @@ if __name__ == "__main__":
     if auth.count_users(_conn) == 0:
         print("Chưa có tài khoản nào: mở trang web để tạo tài khoản admin đầu tiên.")
     _conn.close()
-    if lan:
+    # Trong Docker (Dockerfile đặt LABELKIT_CONTAINER=1) IP của container vô nghĩa với người dùng, nên không in
+    if lan and not os.environ.get("LABELKIT_CONTAINER"):
         try:  # lấy IP của máy trong mạng nội bộ (không gửi dữ liệu ra ngoài)
             with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
                 probe.connect(("10.255.255.255", 1))

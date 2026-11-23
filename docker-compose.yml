@@ -1,0 +1,21 @@
+# Start with:   docker compose up -d --build
+# Then open:    http://localhost:8000   (the first account you create becomes the admin)
+services:
+  labelkit:
+    build: .
+    ports:
+      # Reachable from this machine only. To share on your network, change to "8000:8000"
+      # (only do that on a network you trust: there is no HTTPS yet).
+      - "127.0.0.1:8000:8000"
+    volumes:
+      # Database, uploaded images and thumbnails. Back this volume up.
+      - labelkit-data:/data
+      # To import images that already live on this machine without copying them,
+      # mount the folder read-only, then use "import from server path" with /images/...
+      # - /path/to/your/images:/images:ro
+    # environment:
+    #   LABELKIT_IMPORT_ROOT: /images    # only allow importing from inside /images
+    restart: unless-stopped
+
+volumes:
+  labelkit-data:
