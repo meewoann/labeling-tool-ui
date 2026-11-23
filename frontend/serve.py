@@ -2,10 +2,10 @@
 serve.py — chạy web server nhỏ để xem prototype trên trình duyệt.
 
 Cách dùng:
-    python3 serve.py              # chỉ máy này xem được, cổng 8000
-    python3 serve.py --lan        # cho cả máy khác CÙNG MẠNG xem được
-    python3 serve.py 9000         # đổi cổng
-    python3 serve.py 9000 --lan   # kết hợp
+    python3 frontend/serve.py              # chỉ máy này xem được, cổng 8000
+    python3 frontend/serve.py --lan        # cho cả máy khác CÙNG MẠNG xem được
+    python3 frontend/serve.py 9000         # đổi cổng
+    python3 frontend/serve.py 9000 --lan   # kết hợp
 
 Nhấn Ctrl+C để tắt server.
 """
@@ -47,14 +47,6 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
             self.wfile.write(body)
             return
         super().do_GET()
-
-    def send_head(self):
-        # Không cho tải database, code backend và lịch sử git (quan trọng khi dùng --lan)
-        first_part = self.path.split("?")[0].lstrip("/").split("/")[0]
-        if first_part in ("backend", ".git"):
-            self.send_error(404)
-            return None
-        return super().send_head()
 
 
 def get_lan_ip():

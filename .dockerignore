@@ -20,4 +20,4 @@ backend/data
 **/*.db-shm
 
 # Only used when running without the backend
-serve.py
+frontend/serve.py

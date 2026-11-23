@@ -19,9 +19,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 
 # Only what the app needs at runtime (see .dockerignore for what is left out)
 COPY backend backend
-COPY css css
-COPY js js
-COPY *.html ./
+COPY frontend frontend
 
 # Do not run as root
 RUN useradd --uid 10001 --no-create-home --shell /usr/sbin/nologin labelkit \

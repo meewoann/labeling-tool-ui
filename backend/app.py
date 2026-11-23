@@ -42,7 +42,7 @@ import db
 # 1. CẤU HÌNH & HELPER
 # ==========================================================
 
-FRONTEND_DIR = db.BASE_DIR.parent                      # thư mục chứa index.html, css/, js/...
+FRONTEND_DIR = db.BASE_DIR.parent / "frontend"         # thư mục chứa index.html, css/, js/...
 THUMB_WIDTH = 320
 
 
