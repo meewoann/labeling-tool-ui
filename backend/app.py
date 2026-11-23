@@ -39,11 +39,24 @@ import db
 # ==========================================================
 
 FRONTEND_DIR = db.BASE_DIR.parent                      # thư mục chứa index.html, css/, js/...
-DATA_DIR = db.DEFAULT_DB_PATH.parent
-UPLOAD_DIR = Path(os.environ.get("LABELKIT_UPLOAD_DIR", DATA_DIR / "uploads")).resolve()
-THUMB_DIR = DATA_DIR / "thumbs"
 THUMB_WIDTH = 320
-IMPORT_ROOT = os.environ.get("LABELKIT_IMPORT_ROOT")   # None = không giới hạn
+
+
+# Các đường dẫn dưới đây đọc từ biến môi trường mỗi lần dùng (không đọc 1 lần lúc khởi động)
+def data_dir():
+    return db.default_db_path().parent
+
+
+def upload_dir():
+    return Path(os.environ.get("LABELKIT_UPLOAD_DIR", data_dir() / "uploads")).resolve()
+
+
+def thumb_dir():
+    return data_dir() / "thumbs"
+
+
+def import_root():
+    return os.environ.get("LABELKIT_IMPORT_ROOT")      # None = không giới hạn
 
 app = FastAPI(title="LabelKit API")
 
@@ -84,9 +97,9 @@ def image_json(row):
 
 def check_import_root(folder):
     """Nếu có đặt LABELKIT_IMPORT_ROOT thì chỉ cho import folder nằm trong đó."""
-    if IMPORT_ROOT is None:
+    if import_root() is None:
         return
-    root = Path(IMPORT_ROOT).expanduser().resolve()
+    root = Path(import_root()).expanduser().resolve()
     target = Path(folder).expanduser().resolve()
     if root != target and root not in target.parents:
         raise HTTPException(403, f"Chỉ được import folder nằm trong {root}")
@@ -155,7 +168,7 @@ def upload_target(project_id, folder_name):
     name = PurePosixPath(folder_name.replace("\\", "/")).name.strip()
     if name in ("", ".", ".."):
         raise HTTPException(400, "Tên folder không hợp lệ")
-    return UPLOAD_DIR / f"project_{project_id}" / name
+    return upload_dir() / f"project_{project_id}" / name
 
 
 @app.post("/api/projects/{project_id}/upload")
@@ -268,9 +281,9 @@ def image_file(image_id: int, conn=Depends(get_conn)):
 def image_thumb(image_id: int, conn=Depends(get_conn)):
     """Ảnh thu nhỏ, tạo lần đầu rồi lưu lại để lần sau trả ngay."""
     row = image_file_or_404(conn, image_id)
-    thumb = THUMB_DIR / f"{image_id}_{THUMB_WIDTH}.jpg"
+    thumb = thumb_dir() / f"{image_id}_{THUMB_WIDTH}.jpg"
     if not thumb.is_file():
-        THUMB_DIR.mkdir(parents=True, exist_ok=True)
+        thumb_dir().mkdir(parents=True, exist_ok=True)
         with Image.open(row["full_path"]) as img:
             img = img.convert("RGB")
             img.thumbnail((THUMB_WIDTH, THUMB_WIDTH))  # giữ tỉ lệ, cạnh dài tối đa 320px
@@ -324,7 +337,7 @@ if __name__ == "__main__":
     numbers = [a for a in args if a.isdigit()]
     port = int(numbers[0]) if numbers else 8000
 
-    print(f"Database: {db.DEFAULT_DB_PATH}")
+    print(f"Database: {db.default_db_path()}")
     print(f"Mở: http://localhost:{port}")
     if lan:
         try:  # lấy IP của máy trong mạng nội bộ (không gửi dữ liệu ra ngoài)
