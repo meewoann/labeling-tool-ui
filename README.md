@@ -1,5 +1,13 @@
 # LabelKit — Image Annotation UI Prototype
 
+![Python](https://img.shields.io/badge/Python-3.10-3776AB?logo=python&logoColor=white)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
+![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
+![HTML5](https://img.shields.io/badge/HTML5-E34F26?logo=html5&logoColor=white)
+![CSS3](https://img.shields.io/badge/CSS3-1572B6?logo=css3&logoColor=white)
+![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?logo=javascript&logoColor=black)
+![Status](https://img.shields.io/badge/status-prototype-F59E0B)
+
 Prototype giao diện (click được) cho một tool gán nhãn ảnh dùng để làm dataset computer vision.
 Tất cả các trang và việc chuyển trang đều hoạt động, nhưng các tính năng thật (vẽ box, lưu dữ liệu,
 export file) **chưa** được làm. Toàn bộ dữ liệu là dữ liệu giả.
@@ -125,6 +133,8 @@ Không chạy backend thì giao diện vẫn mở được như trước (trốn
 | `backend/app.py` | Web server + API (FastAPI): đăng nhập, project, upload, import, ảnh, thumbnail, trạng thái |
 | `backend/auth.py` | Băm mật khẩu, tài khoản, phiên đăng nhập, khoá đăng nhập sai |
 | `backend/test_api.py` | Test API qua HTTP thật (đăng nhập, phân quyền, luồng chính) |
+
+Test backend cũng tự chạy trên GitHub Actions (Python 3.10 và 3.12) ở mỗi lần push lên `main` và mỗi Pull Request (`.github/workflows/tests.yml`).
 
 Biến môi trường (không bắt buộc): `LABELKIT_DB` (file database), `LABELKIT_UPLOAD_DIR` (nơi lưu ảnh
 upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho import folder nằm trong thư mục này).
