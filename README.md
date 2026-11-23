@@ -33,7 +33,7 @@ Giao diện được thiết kế cho màn hình rộng từ 1280px trở lên.
 labeling-tool-ui/
 ├── index.html … 404.html   Mỗi trang là 1 file HTML. Sidebar và top bar được copy y hệt vào từng file
 ├── serve.py                Chạy server nhỏ: python3 serve.py rồi mở http://localhost:8000
-├── backend/                Database lưu folder ảnh + trạng thái (xem mục "Database" bên dưới)
+├── backend/                Database + API lưu folder ảnh và trạng thái (xem mục "Database" bên dưới)
 ├── css/style.css           Toàn bộ CSS. Biến màu (--primary, --bg, --text…) nằm ở đầu file
 ├── js/app.js               Toàn bộ JavaScript (xem mục lục ở đầu file)
 └── README.md
@@ -88,12 +88,45 @@ python3 backend/cli.py images "Street Traffic" --status unlabeled --limit 20
 python3 backend/cli.py status 5 labeled          # đổi trạng thái ảnh có id = 5
 ```
 
-Giao diện web hiện **chưa** nối với database này.
+## Chạy web có database (upload folder ảnh, đổi trạng thái)
+
+```bash
+pip install -r backend/requirements.txt
+python3 backend/app.py            # http://localhost:8000
+python3 backend/app.py --lan      # cho cả máy cùng mạng truy cập
+```
+
+Một lệnh vừa phục vụ các trang web vừa cung cấp API (`/api/...`). Trên giao diện bạn có thể:
+
+- **New Project**: tạo project mới (lưu vào database).
+- **Upload** ở trang project: chọn cả folder ảnh từ máy mình (có thanh tiến độ), hoặc nhập đường dẫn
+  một folder đã nằm sẵn trên máy chủ (hợp với dataset lớn, không phải upload lại).
+- Lọc ảnh theo trạng thái, xem ảnh thật ở trang Annotate, đổi trạng thái
+  (`unlabeled` / `labeled` / `review`) bằng ô chọn hoặc nút **Submit for review**.
+
+Không chạy backend thì giao diện vẫn mở được như trước (trống, hoặc có dữ liệu mẫu nếu đặt
+`USE_DEMO_DATA = true` trong `js/app.js`). Lúc đó nút Upload sẽ báo cần chạy backend.
+
+| File | Làm gì |
+| --- | --- |
+| `backend/app.py` | Web server + API (FastAPI): project, upload, import, ảnh, thumbnail, trạng thái |
+
+Biến môi trường (không bắt buộc): `LABELKIT_DB` (file database), `LABELKIT_UPLOAD_DIR` (nơi lưu ảnh
+upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho import folder nằm trong thư mục này).
+
+**Lưu ý bảo mật:** hiện **chưa có đăng nhập**. Ai truy cập được địa chỉ web đều tạo project, upload
+và đổi trạng thái được; ô "import đường dẫn" cũng cho phép đăng ký bất kỳ folder ảnh nào trên máy chủ.
+Vì vậy chỉ dùng `--lan` ở mạng bạn tin tưởng, và nên đặt `LABELKIT_IMPORT_ROOT`.
+Server chỉ phục vụ đúng các trang HTML, `css/` và `js/`; file database và code backend không tải được qua web.
+
+**Chưa có:** class, annotation (box/polygon), thành viên, export thật. Trang gán nhãn hiện chỉ xem ảnh
+và đổi trạng thái; các thanh công cụ vẫn là giao diện mẫu.
 
 ## Cho người cùng mạng xem
 
 ```bash
-python3 serve.py --lan
+python3 backend/app.py --lan     # bản có database
+python3 serve.py --lan           # chỉ file tĩnh, không database
 ```
 
-Terminal sẽ in ra link dạng `http://192.168.x.x:8000` để gửi cho người cùng mạng.
+Terminal sẽ in ra địa chỉ để gửi cho người cùng mạng (với `serve.py` là link dạng `http://192.168.x.x:8000`).

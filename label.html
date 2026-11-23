@@ -76,11 +76,11 @@
       <!-- Trên: Back, tên ảnh, phím tắt, Save -->
       <div class="ws-header">
         <div class="ws-title">
-          <a href="project.html" class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i>Back</a>
+          <a href="project.html" class="btn btn-ghost btn-sm" id="btn-back"><i data-lucide="arrow-left"></i>Back</a>
           <span class="divider-v"></span>
           <div>
             <h2 id="image-title">img_0001.jpg</h2>
-            <p class="text-small text-muted">Street Traffic Detection · <span id="image-counter">1 / 12</span></p>
+            <p class="text-small text-muted"><span id="label-project-name"></span> · <span id="image-counter"></span></p>
           </div>
           <span class="status-badge" id="image-status"></span>
         </div>
@@ -88,7 +88,7 @@
           <button class="btn btn-ghost btn-sm" data-open-modal="modal-shortcuts">
             <i data-lucide="keyboard"></i>Shortcuts
           </button>
-          <button class="btn btn-secondary btn-sm" data-toast="Image sent for review (demo only)" data-toast-type="success">
+          <button class="btn btn-secondary btn-sm" id="btn-submit-review">
             <i data-lucide="send"></i>Submit for review
           </button>
           <button class="btn btn-primary btn-sm" id="btn-save"><i data-lucide="save"></i>Save</button>

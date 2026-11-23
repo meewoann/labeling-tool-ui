@@ -111,6 +111,24 @@ class DbTestCase(unittest.TestCase):
         with self.assertRaises(sqlite3.IntegrityError):
             self.conn.execute("UPDATE images SET status = 'bay-ba' WHERE id = ?", (image_id,))
 
+    def test_count_get_and_window(self):
+        db.import_folder(self.conn, self.project_id, self.photos)
+        images = db.list_images(self.conn, self.project_id)
+        db.set_status(self.conn, images[1]["id"], "review")
+
+        self.assertEqual(db.count_images(self.conn, self.project_id), 3)
+        self.assertEqual(db.count_images(self.conn, self.project_id, "review"), 1)
+        self.assertEqual(db.get_image(self.conn, images[2]["id"])["rel_path"], "sub/c.jpg")
+        with self.assertRaises(LookupError):
+            db.get_image(self.conn, 99999)
+
+        # Cửa sổ 2 ảnh quanh ảnh thứ 3 (vị trí 2) bắt đầu từ offset 1
+        self.assertEqual(db.image_window_offset(self.conn, self.project_id, images[2]["id"], 2), 1)
+        self.assertEqual(db.image_window_offset(self.conn, self.project_id, images[0]["id"], 2), 0)
+        # Ảnh bìa project = ảnh đầu tiên
+        cover = db.list_projects(self.conn, self.project_id)[0]["cover_image_id"]
+        self.assertEqual(cover, images[0]["id"])
+
     def test_two_folders_and_delete_project(self):
         other = self.root / "other"
         make_image(other / "x.jpg")

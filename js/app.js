@@ -73,16 +73,20 @@ const DEMO_MEMBERS = [
   { name: 'Tom Le', email: 'tom@example.com', role: 'Viewer', labeled: 0, color: '#EC4899' },
 ];
 
-// ----- Công tắc dữ liệu giả -----
-// false = chưa có dữ liệu nào (giao diện trống, như khi chưa upload gì)
-// true  = hiện dữ liệu mẫu ở trên để xem giao diện khi đã có project, ảnh...
+// ----- Hai chế độ chạy -----
+// 1) Có backend (python3 backend/app.py): dữ liệu lấy từ DATABASE qua /api, công tắc dưới đây bị bỏ qua.
+// 2) Không có backend (mở file trực tiếp hoặc serve.py): dùng công tắc USE_DEMO_DATA.
+//    false = trống (như chưa upload gì), true = hiện dữ liệu mẫu ở trên để xem giao diện đầy đủ.
 const USE_DEMO_DATA = false;
 
-// Các mảng mà toàn bộ code bên dưới sử dụng
-const PROJECTS = USE_DEMO_DATA ? DEMO_PROJECTS : [];
-const CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];
-const IMAGES = USE_DEMO_DATA ? DEMO_IMAGES : [];
-const MEMBERS = USE_DEMO_DATA ? DEMO_MEMBERS : [];
+// Các mảng mà toàn bộ code bên dưới sử dụng.
+// Dùng "let" vì ở chế độ có backend, dữ liệu thật sẽ được nạp vào thay thế (xem loadData).
+let PROJECTS = (USE_DEMO_DATA ? DEMO_PROJECTS : []).map(mockProject);
+const CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];   // chưa có trong database
+let IMAGES = (USE_DEMO_DATA ? DEMO_IMAGES : []).map(mockImage);
+const MEMBERS = USE_DEMO_DATA ? DEMO_MEMBERS : [];   // chưa có trong database
+
+let API_MODE = false; // true khi tìm thấy backend (loadData sẽ quyết định)
 
 // Chữ hiển thị cho từng trạng thái ảnh
 const STATUS_TEXT = { labeled: 'Labeled', unlabeled: 'Unlabeled', review: 'In review' };
@@ -125,9 +129,127 @@ function getInitials(name) {
   return name.split(' ').map(word => word[0]).join('').toUpperCase();
 }
 
+// Chống chèn HTML: mọi chữ do người dùng đặt (tên project, tên file...) phải qua hàm này
+// trước khi nhét vào innerHTML, nếu không tên file như <img onerror=...> sẽ chạy được code.
+function esc(text) {
+  return String(text)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// "2026-11-23 13:00:08" (giờ UTC trong database) → "5 min ago"
+function timeAgo(sqlDate) {
+  const seconds = Math.max(0, (Date.now() - new Date(sqlDate.replace(' ', 'T') + 'Z')) / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  if (minutes < 1) return 'just now';
+  if (hours < 1) return `${minutes} min ago`;
+  if (days < 1) return `${hours} ${hours === 1 ? 'hour' : 'hours'} ago`;
+  return `${days} ${days === 1 ? 'day' : 'days'} ago`;
+}
+
 // Tìm class theo id
 function findClass(id) {
   return CLASSES.find(c => c.id === id);
+}
+
+/* ----- Chuyển dữ liệu về 1 dạng chung -----
+   Dù dữ liệu đến từ mock hay từ API, phần vẽ giao diện chỉ làm việc với các object
+   có cùng tên trường (name, totalImages, thumbUrl...). Các hàm dưới đây làm việc chuyển đổi đó. */
+
+function mockProject(p) {
+  return { ...p, coverUrl: imageUrl(p.cover, 600, 280) };
+}
+
+function mockImage(img) {
+  return {
+    ...img,
+    thumbUrl: imageUrl(img.seed, 320, 240),
+    fileUrl: imageUrl(img.seed, 800, 600),
+    ratio: 4 / 3,
+    meta: `${img.boxes.length} ${img.boxes.length === 1 ? 'box' : 'boxes'}`,
+  };
+}
+
+function projectFromApi(p) {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    type: '',
+    totalImages: p.total,
+    labeledImages: p.labeled,
+    unlabeledImages: p.unlabeled,
+    reviewImages: p.review,
+    classes: 0,
+    members: 0,
+    updatedAt: timeAgo(p.updated_at),
+    coverUrl: p.cover_image_id ? `/api/images/${p.cover_image_id}/thumb` : null,
+  };
+}
+
+function imageFromApi(i) {
+  return {
+    id: i.id,
+    name: i.filename,
+    status: i.status,
+    size: `${i.width} × ${i.height}`,
+    format: i.filename.split('.').pop().toUpperCase(),
+    folder: i.folder_name,
+    annotator: '—',
+    boxes: [],            // chưa có annotation trong database
+    thumbUrl: i.thumb_url,
+    fileUrl: i.file_url,
+    ratio: i.width / i.height,   // tỉ lệ rộng / cao của ảnh
+    meta: `${i.width} × ${i.height}`,
+  };
+}
+
+/* ----- Gọi API ----- */
+
+// Đọc lỗi mà server trả về (FastAPI để chữ lỗi trong "detail")
+async function errorMessage(response) {
+  try {
+    const body = await response.json();
+    if (typeof body.detail === 'string') return body.detail;
+  } catch (e) { /* không phải JSON, dùng chữ mặc định bên dưới */ }
+  return `Request failed (${response.status})`;
+}
+
+// Gọi API và trả về JSON. Lỗi thì throw Error có chữ dễ hiểu.
+async function api(path, options = {}) {
+  const response = await fetch(path, options);
+  if (!response.ok) throw new Error(await errorMessage(response));
+  return response.json();
+}
+
+function apiPost(path, body) {
+  return api(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+// Có backend không? Mở file trực tiếp (file://) hoặc server chỉ có file tĩnh thì không có /api
+async function detectApi() {
+  if (window.location.protocol === 'file:') return false;
+  try {
+    const response = await fetch('/api/health');
+    if (!response.ok) return false;
+    return (await response.json()).ok === true; // server file tĩnh (serve.py) trả {"ok": false}
+  } catch (e) {
+    return false;
+  }
+}
+
+// Chạy 1 lần khi mở trang: nếu có backend thì nạp danh sách project từ database
+async function loadData() {
+  API_MODE = await detectApi();
+  if (API_MODE) {
+    PROJECTS = (await api('/api/projects')).map(projectFromApi);
+  }
 }
 
 // HTML cho trạng thái trống (chưa có dữ liệu). buttonHTML có thể để trống
@@ -168,7 +290,8 @@ function showToast(message, type = 'success') {
   const icons = { success: 'circle-check', info: 'info', error: 'circle-alert' };
   const toast = document.createElement('div');
   toast.className = `toast toast-${type}`;
-  toast.innerHTML = `<i data-lucide="${icons[type]}"></i><span>${message}</span>`;
+  toast.innerHTML = `<i data-lucide="${icons[type]}"></i><span></span>`;
+  toast.querySelector('span').textContent = message; // textContent: an toàn dù message có ký tự lạ
   container.appendChild(toast);
   refreshIcons();
 
@@ -212,8 +335,11 @@ function highlightSidebar() {
 // Modal: nút có data-open-modal="id" để mở,
 // nút có data-close-modal (nút X, Cancel) hoặc click ra ngoài để đóng
 function initModals() {
-  document.querySelectorAll('[data-open-modal]').forEach(btn => {
-    btn.addEventListener('click', () => openModal(btn.dataset.openModal));
+  // Lắng nghe click trên cả trang: nút nào có data-open-modal đều mở được,
+  // kể cả nút được JS tạo ra sau này (vd: nút Upload trong khối "chưa có ảnh")
+  document.addEventListener('click', event => {
+    const btn = event.target.closest('[data-open-modal]');
+    if (btn) openModal(btn.dataset.openModal);
   });
 
   document.querySelectorAll('.modal-overlay').forEach(overlay => {
@@ -291,15 +417,17 @@ function initSearch() {
 
 /* ---------- projects.html: Danh sách project ---------- */
 function initProjectsPage() {
-  // Thẻ thống kê tổng quan
-  const totalImages = PROJECTS.reduce((sum, p) => sum + p.totalImages, 0);
-  const totalLabeled = PROJECTS.reduce((sum, p) => sum + p.labeledImages, 0);
-  document.getElementById('overview-projects').textContent = PROJECTS.length;
-  document.getElementById('overview-images').textContent = formatNumber(totalImages);
-  document.getElementById('overview-labeled').textContent = percent(totalLabeled, totalImages) + '%';
-  document.getElementById('overview-members').textContent = MEMBERS.length;
-
   const grid = document.getElementById('project-grid');
+
+  // Thẻ thống kê tổng quan
+  function renderStats() {
+    const totalImages = PROJECTS.reduce((sum, p) => sum + p.totalImages, 0);
+    const totalLabeled = PROJECTS.reduce((sum, p) => sum + p.labeledImages, 0);
+    document.getElementById('overview-projects').textContent = PROJECTS.length;
+    document.getElementById('overview-images').textContent = formatNumber(totalImages);
+    document.getElementById('overview-labeled').textContent = percent(totalLabeled, totalImages) + '%';
+    document.getElementById('overview-members').textContent = MEMBERS.length;
+  }
 
   // Tạo HTML cho 1 project card
   function projectCardHTML(p) {
@@ -311,15 +439,21 @@ function initProjectsPage() {
       .join('');
     const more = p.members > 3 ? `<span class="avatar-more">+${p.members - 3}</span>` : '';
 
+    // Project chưa có ảnh thì không có ảnh bìa
+    const cover = p.coverUrl
+      ? `<img src="${p.coverUrl}" alt="" loading="lazy">`
+      : '<div class="cover-empty"><i data-lucide="images"></i></div>';
+    const typeBadge = p.type ? `<span class="badge">${esc(p.type)}</span>` : '';
+
     return `
       <a href="project.html?id=${p.id}" class="card project-card">
         <div class="project-cover">
-          <img src="${imageUrl(p.cover, 600, 280)}" alt="" loading="lazy">
-          <span class="badge">${p.type}</span>
+          ${cover}
+          ${typeBadge}
         </div>
         <div class="project-body">
-          <h3>${p.name}</h3>
-          <p class="project-desc">${p.description}</p>
+          <h3>${esc(p.name)}</h3>
+          <p class="project-desc">${esc(p.description) || '&nbsp;'}</p>
           <div class="project-meta">
             <span><i data-lucide="image"></i>${formatNumber(p.totalImages)} images</span>
             <span><i data-lucide="tag"></i>${p.classes} classes</span>
@@ -329,7 +463,7 @@ function initProjectsPage() {
             <span class="progress-value">${pct}%</span>
           </div>
           <div class="project-footer">
-            <span class="updated"><i data-lucide="clock"></i>Updated ${p.updatedAt}</span>
+            <span class="updated"><i data-lucide="clock"></i>Updated ${esc(p.updatedAt)}</span>
             <span class="avatar-stack">${avatars}${more}</span>
           </div>
         </div>
@@ -353,6 +487,7 @@ function initProjectsPage() {
     refreshIcons();
   }
 
+  renderStats();
   render(PROJECTS);
 
   // Gõ vào ô search trên top bar → lọc project theo tên
@@ -362,21 +497,38 @@ function initProjectsPage() {
     render(PROJECTS.filter(p => p.name.toLowerCase().includes(keyword)));
   });
 
-  // Form "New Project": chỉ đóng modal + hiện toast, không lưu gì
-  document.getElementById('new-project-form').addEventListener('submit', event => {
+  // Form "New Project"
+  document.getElementById('new-project-form').addEventListener('submit', async event => {
     event.preventDefault();
-    closeModal(document.getElementById('modal-new-project'));
-    event.target.reset();
-    showToast('Project created (demo only, nothing was saved)');
+    const form = event.target;
+
+    // Không có backend: chỉ đóng modal + hiện toast, không lưu gì
+    if (!API_MODE) {
+      closeModal(document.getElementById('modal-new-project'));
+      form.reset();
+      showToast('Project created (demo only, nothing was saved)');
+      return;
+    }
+
+    // Có backend: lưu vào database rồi mở luôn project mới để upload ảnh
+    try {
+      const created = await apiPost('/api/projects', {
+        name: document.getElementById('np-name').value,
+        description: document.getElementById('np-desc').value,
+      });
+      window.location.href = `project.html?id=${created.id}`;
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
   });
 }
 
 
 /* ---------- project.html: Tổng quan 1 project ---------- */
-function initProjectPage() {
+async function initProjectPage() {
   // Lấy project theo ?id=..., không có thì dùng project đầu tiên
   const id = Number(getQueryParam('id'));
-  const project = PROJECTS.find(p => p.id === id) || PROJECTS[0];
+  let project = PROJECTS.find(p => p.id === id) || PROJECTS[0];
 
   // Chưa có project nào (hoặc id sai) → báo trống rồi dừng
   if (!project) {
@@ -387,68 +539,126 @@ function initProjectPage() {
     return;
   }
 
-  // Tên, mô tả
-  document.title = `${project.name} · LabelKit`;
-  document.getElementById('breadcrumb-name').textContent = project.name;
-  document.getElementById('project-name').textContent = project.name;
-  document.getElementById('project-desc').textContent = project.description;
-
-  // 4 thẻ thống kê
-  const unlabeled = project.totalImages - project.labeledImages;
-  document.getElementById('stat-total').textContent = formatNumber(project.totalImages);
-  document.getElementById('stat-labeled').textContent = formatNumber(project.labeledImages);
-  document.getElementById('stat-labeled-sub').textContent = `${percent(project.labeledImages, project.totalImages)}% of dataset`;
-  document.getElementById('stat-unlabeled').textContent = formatNumber(unlabeled);
-  document.getElementById('stat-unlabeled-sub').textContent = `${percent(unlabeled, project.totalImages)}% remaining`;
-  document.getElementById('stat-classes').textContent = project.classes;
-  document.getElementById('tab-count-classes').textContent = CLASSES.length;
-  document.getElementById('tab-count-images').textContent = formatNumber(project.totalImages);
-  document.getElementById('images-showing').textContent = `Showing ${IMAGES.length} of ${formatNumber(project.totalImages)} images`;
+  // Tên, mô tả và 4 thẻ thống kê (gọi lại sau khi upload để cập nhật số)
+  function renderHeader() {
+    const unlabeled = project.unlabeledImages !== undefined
+      ? project.unlabeledImages
+      : project.totalImages - project.labeledImages;
+    document.title = `${project.name} · LabelKit`;
+    document.getElementById('breadcrumb-name').textContent = project.name;
+    document.getElementById('project-name').textContent = project.name;
+    document.getElementById('project-desc').textContent = project.description;
+    document.getElementById('stat-total').textContent = formatNumber(project.totalImages);
+    document.getElementById('stat-labeled').textContent = formatNumber(project.labeledImages);
+    document.getElementById('stat-labeled-sub').textContent = `${percent(project.labeledImages, project.totalImages)}% of dataset`;
+    document.getElementById('stat-unlabeled').textContent = formatNumber(unlabeled);
+    document.getElementById('stat-unlabeled-sub').textContent = `${percent(unlabeled, project.totalImages)}% remaining`;
+    document.getElementById('stat-classes').textContent = project.classes;
+    document.getElementById('tab-count-classes').textContent = CLASSES.length;
+    document.getElementById('tab-count-images').textContent = formatNumber(project.totalImages);
+  }
+  renderHeader();
 
   // ----- Tab Images -----
+  const PAGE_SIZE = 60;                 // mỗi lần tải 60 ảnh, bấm "Load more" để tải tiếp
   const grid = document.getElementById('image-grid');
+  const loadMore = document.getElementById('load-more');
+  const chips = document.querySelectorAll('.chip[data-filter]');
+  let filter = 'all';                   // bộ lọc đang chọn: all | labeled | unlabeled | review
+  let shown = 0;                        // đã hiển thị bao nhiêu ảnh
+  let loadToken = 0;                    // để bỏ qua kết quả cũ nếu bấm đổi bộ lọc nhanh
 
-  function renderImages(filter) {
-    const list = filter === 'all' ? IMAGES : IMAGES.filter(img => img.status === filter);
-    if (list.length === 0) {
-      grid.innerHTML = emptyStateHTML('images', 'No images', 'Upload images to start labeling.');
-      refreshIcons();
-      return;
+  // Số ảnh ghi trên từng chip lọc
+  function renderChipCounts() {
+    const count = status => IMAGES.filter(img => img.status === status).length;
+    const counts = API_MODE
+      ? { all: project.totalImages, labeled: project.labeledImages, unlabeled: project.unlabeledImages, review: project.reviewImages }
+      : { all: IMAGES.length, labeled: count('labeled'), unlabeled: count('unlabeled'), review: count('review') };
+    chips.forEach(chip => {
+      chip.querySelector('.chip-count').textContent = counts[chip.dataset.filter];
+    });
+  }
+
+  // Lấy 1 trang ảnh: từ API (có backend) hoặc từ mảng IMAGES (dữ liệu mẫu)
+  async function fetchImages(offset) {
+    if (API_MODE) {
+      const statusParam = filter === 'all' ? '' : `&status=${filter}`;
+      const data = await api(`/api/projects/${project.id}/images?limit=${PAGE_SIZE}&offset=${offset}${statusParam}`);
+      return { items: data.items.map(imageFromApi), total: data.total };
     }
-    grid.innerHTML = list.map(img => `
-      <a href="label.html?image=${img.id}" class="image-card">
-        <img src="${imageUrl(img.seed, 320, 240)}" alt="${img.name}" loading="lazy">
+    const list = filter === 'all' ? IMAGES : IMAGES.filter(img => img.status === filter);
+    return { items: list.slice(offset, offset + PAGE_SIZE), total: list.length };
+  }
+
+  function imageCardHTML(img) {
+    return `
+      <a href="label.html?project=${project.id}&image=${img.id}" class="image-card">
+        <img src="${img.thumbUrl}" alt="${esc(img.name)}" loading="lazy">
         <span class="status-badge status-${img.status}">${STATUS_TEXT[img.status]}</span>
         <div class="image-card-footer">
-          <b>${img.name}</b>
-          <span>${img.boxes.length} ${img.boxes.length === 1 ? 'box' : 'boxes'}</span>
+          <b>${esc(img.name)}</b>
+          <span>${esc(img.meta)}</span>
         </div>
-      </a>`).join('');
+      </a>`;
   }
-  renderImages('all');
 
-  // Ghi số lượng lên từng chip lọc, rồi cho click để lọc
-  const chips = document.querySelectorAll('.chip[data-filter]');
-  chips.forEach(chip => {
-    const filter = chip.dataset.filter;
-    const count = filter === 'all' ? IMAGES.length : IMAGES.filter(img => img.status === filter).length;
-    chip.querySelector('.chip-count').textContent = count;
+  // append = false: tải lại từ đầu (đổi bộ lọc); true: nối thêm (nút Load more)
+  async function loadImages(append) {
+    const token = ++loadToken;
+    const offset = append ? shown : 0;
+    const { items, total } = await fetchImages(offset);
+    if (token !== loadToken) return; // đã có lần tải mới hơn, bỏ kết quả này
+
+    if (total === 0) {
+      grid.innerHTML = filter === 'all'
+        ? emptyStateHTML('images', 'No images yet', 'Upload a folder of images to get started.',
+            '<button class="btn btn-primary" data-open-modal="modal-upload"><i data-lucide="upload"></i>Upload</button>')
+        : emptyStateHTML('images', 'No images here', 'No images have this status.');
+    } else if (append) {
+      grid.insertAdjacentHTML('beforeend', items.map(imageCardHTML).join(''));
+    } else {
+      grid.innerHTML = items.map(imageCardHTML).join('');
+    }
+
+    shown = offset + items.length;
+    loadMore.hidden = shown >= total;
+    document.getElementById('images-showing').textContent =
+      total === 0 ? '' : `Showing ${formatNumber(shown)} of ${formatNumber(total)} images`;
+    refreshIcons();
+  }
+
+  renderChipCounts();
+  await loadImages(false);
+  makeSelectable(chips, chip => {
+    filter = chip.dataset.filter;
+    loadImages(false);
   });
-  makeSelectable(chips, chip => renderImages(chip.dataset.filter));
+  document.getElementById('btn-load-more').addEventListener('click', () => loadImages(true));
+
+  // Làm mới số liệu + danh sách ảnh (sau khi upload / import xong)
+  async function refreshAll() {
+    if (API_MODE) project = projectFromApi(await api(`/api/projects/${project.id}`));
+    renderHeader();
+    renderChipCounts();
+    await loadImages(false);
+  }
+
+  // ----- Upload folder ảnh / import từ đường dẫn trên máy chủ -----
+  initUpload(project.id, refreshAll);
 
   // ----- Tab Classes -----
   const classList = document.getElementById('class-list');
-  classList.innerHTML = CLASSES.map(c => `
+  classList.innerHTML = CLASSES.length ? CLASSES.map(c => `
     <div class="list-row">
       <span class="color-swatch" style="background:${c.color}"></span>
       <div class="list-row-main">
-        <p class="list-row-title">${c.name}</p>
+        <p class="list-row-title">${esc(c.name)}</p>
         <p class="text-small text-muted">ID ${c.id}</p>
       </div>
       <span class="list-row-stat">${formatNumber(c.count)} annotations</span>
       <code class="color-code">${c.color}</code>
       <button class="btn btn-ghost btn-sm" data-edit-class="${c.id}"><i data-lucide="pencil"></i>Edit</button>
-    </div>`).join('');
+    </div>`).join('') : emptyStateHTML('tag', 'No classes yet', 'Classes are not stored in the database yet.');
 
   // Các ô màu trong modal class
   const colorBox = document.getElementById('color-options');
@@ -474,23 +684,196 @@ function initProjectPage() {
 
   // ----- Tab Members -----
   document.getElementById('tab-count-members').textContent = MEMBERS.length;
-  document.getElementById('member-list').innerHTML = MEMBERS.map(m => `
+  document.getElementById('member-list').innerHTML = MEMBERS.length ? MEMBERS.map(m => `
     <div class="list-row">
       <span class="avatar" style="background:${m.color}">${getInitials(m.name)}</span>
       <div class="list-row-main">
-        <p class="list-row-title">${m.name}</p>
-        <p class="text-small text-muted">${m.email}</p>
+        <p class="list-row-title">${esc(m.name)}</p>
+        <p class="text-small text-muted">${esc(m.email)}</p>
       </div>
       <span class="list-row-stat">${formatNumber(m.labeled)} images labeled</span>
       <span class="badge ${m.role === 'Owner' ? 'badge-green' : ''}">${m.role}</span>
-    </div>`).join('');
+    </div>`).join('') : emptyStateHTML('users', 'No members yet', 'Members are not stored in the database yet.');
 
   refreshIcons();
 }
 
 
+// Upload folder ảnh từ trình duyệt lên server, hoặc import 1 folder đã nằm sẵn trên server.
+// onDone() được gọi sau khi xong để trang vẽ lại số liệu và danh sách ảnh.
+function initUpload(projectId, onDone) {
+  const IMAGE_FILE = /\.(jpe?g|png|bmp|webp|tiff?)$/i;
+  const MAX_FILES_PER_BATCH = 20;              // mỗi request gửi tối đa 20 ảnh...
+  const MAX_BYTES_PER_BATCH = 25 * 1024 * 1024; // ...hoặc tối đa 25 MB
+
+  const folderInput = document.getElementById('input-folder');
+  const filesInput = document.getElementById('input-files');
+  const pathInput = document.getElementById('import-path');
+  const progressBox = document.getElementById('upload-progress');
+  const buttons = ['btn-pick-folder', 'btn-pick-files', 'btn-import-path'].map(id => document.getElementById(id));
+  let busy = false;
+
+  // Khoá/mở các nút trong lúc đang upload để không bấm chồng
+  function setBusy(value) {
+    busy = value;
+    buttons.forEach(btn => { btn.disabled = value; });
+  }
+
+  function setProgress(done, total) {
+    const pct = percent(done, total);
+    progressBox.hidden = false;
+    document.getElementById('upload-bar').style.width = pct + '%';
+    document.getElementById('upload-percent').textContent = pct + '%';
+    document.getElementById('upload-text').textContent = `Uploading ${formatNumber(done)} / ${formatNumber(total)} images…`;
+  }
+
+  // Chia danh sách file thành từng lô nhỏ
+  function makeBatches(entries) {
+    const batches = [];
+    let batch = [];
+    let bytes = 0;
+    entries.forEach(entry => {
+      const full = batch.length >= MAX_FILES_PER_BATCH || bytes + entry.file.size > MAX_BYTES_PER_BATCH;
+      if (batch.length && full) {
+        batches.push(batch);
+        batch = [];
+        bytes = 0;
+      }
+      batch.push(entry);
+      bytes += entry.file.size;
+    });
+    if (batch.length) batches.push(batch);
+    return batches;
+  }
+
+  // entries: [{ file, rel }]  (rel = đường dẫn của ảnh bên trong folder, vd "day1/a.jpg")
+  async function upload(entries, folderName) {
+    if (entries.length === 0) {
+      showToast('No images found in your selection', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      let done = 0;
+      setProgress(0, entries.length);
+      for (const batch of makeBatches(entries)) {
+        const form = new FormData();
+        form.append('folder', folderName);
+        batch.forEach(entry => {
+          form.append('paths', entry.rel);
+          form.append('files', entry.file, entry.file.name);
+        });
+        const response = await fetch(`/api/projects/${projectId}/upload`, { method: 'POST', body: form });
+        if (!response.ok) throw new Error(await errorMessage(response));
+        done += batch.length;
+        setProgress(done, entries.length);
+      }
+      // Gửi hết rồi → bảo server ghi các ảnh này vào database
+      const result = await apiPost(`/api/projects/${projectId}/upload/finish`, { folder: folderName });
+      reportImport(result);
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+    progressBox.hidden = true;
+    setBusy(false);
+  }
+
+  function reportImport(result) {
+    let message = `Added ${formatNumber(result.added)} images`;
+    if (result.existing) message += `, ${formatNumber(result.existing)} were already there`;
+    if (result.skipped.length) message += `, ${result.skipped.length} unreadable files skipped`;
+    closeModal(document.getElementById('modal-upload'));
+    showToast(message);
+    onDone();
+  }
+
+  // Không có backend thì các nút chỉ báo là chưa dùng được
+  function needsBackend() {
+    if (API_MODE) return false;
+    showToast('Uploading needs the backend. Run: python3 backend/app.py', 'info');
+    return true;
+  }
+
+  document.getElementById('btn-pick-folder').addEventListener('click', () => {
+    if (!needsBackend()) folderInput.click();
+  });
+  document.getElementById('btn-pick-files').addEventListener('click', () => {
+    if (!needsBackend()) filesInput.click();
+  });
+
+  // Chọn cả folder: webkitRelativePath = "tenfolder/sub/a.jpg"
+  folderInput.addEventListener('change', () => {
+    const files = Array.from(folderInput.files);
+    if (files.length === 0 || busy) return;
+    const folderName = files[0].webkitRelativePath.split('/')[0];
+    const entries = files
+      .filter(file => IMAGE_FILE.test(file.name))
+      .map(file => ({ file, rel: file.webkitRelativePath.split('/').slice(1).join('/') }));
+    folderInput.value = ''; // cho phép chọn lại đúng folder đó lần sau
+    upload(entries, folderName);
+  });
+
+  // Chọn vài ảnh lẻ: gom vào 1 folder đặt tên theo giờ upload
+  filesInput.addEventListener('change', () => {
+    const files = Array.from(filesInput.files);
+    if (files.length === 0 || busy) return;
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    const entries = files.filter(file => IMAGE_FILE.test(file.name)).map(file => ({ file, rel: file.name }));
+    filesInput.value = '';
+    upload(entries, `upload-${stamp}`);
+  });
+
+  // Import folder đã nằm sẵn trên máy chủ (không copy ảnh, chỉ ghi đường dẫn)
+  document.getElementById('btn-import-path').addEventListener('click', async () => {
+    if (needsBackend()) return;
+    const path = pathInput.value.trim();
+    if (!path) {
+      showToast('Enter a folder path on the server', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      reportImport(await apiPost(`/api/projects/${projectId}/import`, { path }));
+      pathInput.value = '';
+    } catch (error) {
+      showToast(error.message, 'error');
+    }
+    setBusy(false);
+  });
+}
+
+
 /* ---------- label.html: Workspace gán nhãn ---------- */
-function initLabelPage() {
+async function initLabelPage() {
+  // Có backend: nạp 1 "cửa sổ" tối đa 200 ảnh của project từ database, ảnh được bấm nằm ở giữa
+  let projectName = 'Street Traffic Detection'; // chỉ dùng cho dữ liệu mẫu
+  let projectId = 0;
+  let windowOffset = 0;            // ảnh đầu tiên của cửa sổ là ảnh thứ mấy trong project
+  let windowTotal = IMAGES.length; // tổng số ảnh của project
+  if (API_MODE) {
+    IMAGES = [];
+    projectId = Number(getQueryParam('project'));
+    if (!projectId) {
+      // Bấm "Annotate" trên sidebar (không có project) → lấy project đầu tiên có ảnh
+      const first = PROJECTS.find(p => p.totalImages > 0);
+      projectId = first ? first.id : 0;
+    }
+    if (projectId) {
+      const imageParam = Number(getQueryParam('image'));
+      const around = imageParam ? `&around=${imageParam}` : '';
+      try {
+        const data = await api(`/api/projects/${projectId}/images?limit=200${around}`);
+        IMAGES = data.items.map(imageFromApi);
+        windowOffset = data.offset;
+        windowTotal = data.total;
+        const project = PROJECTS.find(p => p.id === projectId);
+        if (project) projectName = project.name;
+      } catch (error) {
+        showToast(error.message, 'error'); // project không tồn tại → rơi xuống màn hình "No images"
+      }
+    }
+  }
+
   // Chưa có ảnh nào → hiện trạng thái trống thay cho cả workspace rồi dừng
   if (IMAGES.length === 0) {
     document.querySelector('.workspace').innerHTML = emptyStateHTML('images', 'No images to label',
@@ -504,10 +887,13 @@ function initLabelPage() {
   const startId = Number(getQueryParam('image'));
   let currentIndex = Math.max(0, IMAGES.findIndex(img => img.id === startId)); // không tìm thấy (-1) → 0
   let currentTool = 'select';
-  let selectedClassId = CLASSES[0].id;
+  let selectedClassId = CLASSES.length ? CLASSES[0].id : null; // database chưa có class nên có thể là null
   let zoom = 1;
 
   const TOOL_NAMES = { select: 'Select', bbox: 'Bounding box', polygon: 'Polygon', pan: 'Pan', zoom: 'Zoom' };
+
+  document.getElementById('label-project-name').textContent = projectName;
+  if (projectId) document.getElementById('btn-back').href = `project.html?id=${projectId}`;
 
   // ----- Thanh công cụ bên trái -----
   const toolButtons = document.querySelectorAll('.tool-btn');
@@ -518,12 +904,12 @@ function initLabelPage() {
 
   // ----- Danh sách class bên phải -----
   const classPicker = document.getElementById('class-picker');
-  classPicker.innerHTML = CLASSES.map((c, i) => `
+  classPicker.innerHTML = CLASSES.length ? CLASSES.map((c, i) => `
     <button class="class-item ${c.id === selectedClassId ? 'active' : ''}" data-class-id="${c.id}">
       <span class="class-dot" style="background:${c.color}"></span>
-      <span>${c.name}</span>
+      <span>${esc(c.name)}</span>
       <kbd>${i + 1}</kbd>
-    </button>`).join('');
+    </button>`).join('') : '<p class="empty-text">No classes yet.</p>';
   const classButtons = classPicker.querySelectorAll('.class-item');
   makeSelectable(classButtons, btn => {
     selectedClassId = Number(btn.dataset.classId);
@@ -533,8 +919,8 @@ function initLabelPage() {
   // ----- Dải thumbnail phía dưới -----
   const strip = document.getElementById('thumb-strip');
   strip.innerHTML = IMAGES.map((img, i) => `
-    <button class="thumb" data-index="${i}" title="${img.name}">
-      <img src="${imageUrl(img.seed, 160, 120)}" alt="${img.name}">
+    <button class="thumb" data-index="${i}" title="${esc(img.name)}">
+      <img src="${img.thumbUrl}" alt="${esc(img.name)}" loading="lazy">
       <span class="thumb-dot dot-${img.status}"></span>
     </button>`).join('');
   strip.querySelectorAll('.thumb').forEach(thumb => {
@@ -544,10 +930,56 @@ function initLabelPage() {
   // ----- Các nút -----
   document.getElementById('btn-prev').addEventListener('click', () => showImage(currentIndex - 1));
   document.getElementById('btn-next').addEventListener('click', () => showImage(currentIndex + 1));
-  document.getElementById('btn-save').addEventListener('click', () => showToast('Saved'));
+  document.getElementById('btn-save').addEventListener('click', saveAction);
+
+  // Annotation chưa lưu được vào database, nên ở chế độ có backend nói thẳng cho đỡ nhầm
+  function saveAction() {
+    if (API_MODE) showToast('Annotations are not saved yet. Status changes are saved automatically.', 'info');
+    else showToast('Saved');
+  }
+
+  // "Submit for review": có backend thì đổi trạng thái ảnh thành review
+  document.getElementById('btn-submit-review').addEventListener('click', () => {
+    if (API_MODE) changeStatus('review');
+    else showToast('Image sent for review (demo only)');
+  });
+
+  // Đổi trạng thái của ảnh đang xem và lưu vào database
+  async function changeStatus(status) {
+    const img = IMAGES[currentIndex];
+    if (img.status === status) return;
+    try {
+      await api(`/api/images/${img.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch (error) {
+      showToast(error.message, 'error');
+      showImage(currentIndex); // vẽ lại để ô chọn trạng thái quay về giá trị cũ
+      return;
+    }
+    img.status = status;
+    strip.querySelectorAll('.thumb-dot')[currentIndex].className = `thumb-dot dot-${status}`;
+    showImage(currentIndex);
+    showToast(`Marked as ${STATUS_TEXT[status].toLowerCase()}`);
+  }
+
+  // Khung ảnh luôn có ĐÚNG tỉ lệ của ảnh và to nhất có thể trong vùng canvas
+  // (để ảnh không bị cắt, và sau này vẽ box theo % mới khớp với ảnh)
+  const stage = document.getElementById('canvas-stage');
+  let stageRatio = 4 / 3;
+  function fitStage() {
+    const area = document.querySelector('.canvas-area');
+    const maxWidth = area.clientWidth - 64;
+    const maxHeight = area.clientHeight - 96;
+    const width = Math.min(maxWidth, maxHeight * stageRatio);
+    stage.style.width = width + 'px';
+    stage.style.height = (width / stageRatio) + 'px';
+  }
+  window.addEventListener('resize', fitStage);
 
   // Zoom: chỉ phóng to/thu nhỏ khung ảnh bằng CSS transform
-  const stage = document.getElementById('canvas-stage');
   function setZoom(value) {
     zoom = Math.min(3, Math.max(0.5, value)); // giới hạn 50% – 300%
     stage.style.transform = `scale(${zoom})`;
@@ -560,10 +992,12 @@ function initLabelPage() {
   // Dòng gợi ý trên canvas: tool + class đang chọn
   function updateHint() {
     const cls = findClass(selectedClassId);
+    const classText = cls
+      ? `Class: <span class="class-dot" style="background:${cls.color}"></span><b>${esc(cls.name)}</b>`
+      : 'No classes yet';
     document.getElementById('canvas-hint').innerHTML = `
       <i data-lucide="info"></i>
-      Tool: <b>${TOOL_NAMES[currentTool]}</b> ·
-      Class: <span class="class-dot" style="background:${cls.color}"></span><b>${cls.name}</b>`;
+      Tool: <b>${TOOL_NAMES[currentTool]}</b> · ${classText}`;
     refreshIcons();
   }
 
@@ -586,9 +1020,11 @@ function initLabelPage() {
     const img = IMAGES[index];
 
     // Ảnh + tiêu đề
-    document.getElementById('canvas-image').src = imageUrl(img.seed, 800, 600);
+    stageRatio = img.ratio || 4 / 3;
+    fitStage();
+    document.getElementById('canvas-image').src = img.fileUrl;
     document.getElementById('image-title').textContent = img.name;
-    document.getElementById('image-counter').textContent = `${index + 1} / ${IMAGES.length}`;
+    document.getElementById('image-counter').textContent = `${windowOffset + index + 1} / ${formatNumber(windowTotal)}`;
     const statusEl = document.getElementById('image-status');
     statusEl.className = `status-badge status-${img.status}`;
     statusEl.textContent = STATUS_TEXT[img.status];
@@ -599,7 +1035,7 @@ function initLabelPage() {
       return `
         <div class="bbox" data-index="${i}"
              style="left:${box.x}%; top:${box.y}%; width:${box.w}%; height:${box.h}%; color:${cls.color}; background:${cls.color}1f;">
-          <span class="bbox-label" style="background:${cls.color}">${cls.name}</span>
+          <span class="bbox-label" style="background:${cls.color}">${esc(cls.name)}</span>
         </div>`;
     }).join('');
 
@@ -615,7 +1051,7 @@ function initLabelPage() {
           <button class="annotation-item" data-index="${i}">
             <span class="class-dot" style="background:${cls.color}"></span>
             <div class="annotation-item-main">
-              <p>${cls.name}</p>
+              <p>${esc(cls.name)}</p>
               <p class="text-small text-muted">x ${box.x}% · y ${box.y}% · ${box.w}×${box.h}%</p>
             </div>
             <span class="annotation-id">#${i + 1}</span>
@@ -629,12 +1065,22 @@ function initLabelPage() {
     });
 
     // Thông tin ảnh
+    // Có backend: trạng thái là ô chọn để đổi được; dữ liệu mẫu: chỉ là nhãn hiển thị
+    const statusCell = API_MODE
+      ? `<select class="select select-sm" id="status-select">${Object.keys(STATUS_TEXT).map(key =>
+          `<option value="${key}" ${key === img.status ? 'selected' : ''}>${STATUS_TEXT[key]}</option>`).join('')}</select>`
+      : `<span class="status-badge status-${img.status}">${STATUS_TEXT[img.status]}</span>`;
+    const lastRow = img.folder
+      ? `<div class="info-row"><span>Folder</span><span>${esc(img.folder)}</span></div>`
+      : `<div class="info-row"><span>Annotator</span><span>${esc(img.annotator)}</span></div>`;
     document.getElementById('image-info').innerHTML = `
-      <div class="info-row"><span>File name</span><span>${img.name}</span></div>
-      <div class="info-row"><span>Dimensions</span><span>${img.size}</span></div>
-      <div class="info-row"><span>Format</span><span>JPEG</span></div>
-      <div class="info-row"><span>Status</span><span class="status-badge status-${img.status}">${STATUS_TEXT[img.status]}</span></div>
-      <div class="info-row"><span>Annotator</span><span>${img.annotator}</span></div>`;
+      <div class="info-row"><span>File name</span><span class="info-value">${esc(img.name)}</span></div>
+      <div class="info-row"><span>Dimensions</span><span>${esc(img.size)}</span></div>
+      <div class="info-row"><span>Format</span><span>${esc(img.format || 'JPEG')}</span></div>
+      <div class="info-row"><span>Status</span>${statusCell}</div>
+      ${lastRow}`;
+    const statusSelect = document.getElementById('status-select');
+    if (statusSelect) statusSelect.addEventListener('change', () => changeStatus(statusSelect.value));
 
     // Highlight thumbnail đang xem và cuộn dải thumbnail tới đó
     const thumbs = strip.querySelectorAll('.thumb');
@@ -643,7 +1089,7 @@ function initLabelPage() {
     strip.scrollTo({ left: active.offsetLeft - strip.clientWidth / 2 + active.offsetWidth / 2, behavior: 'smooth' });
 
     // Cập nhật URL (?image=...) để F5 vẫn ở đúng ảnh
-    history.replaceState(null, '', `?image=${img.id}`);
+    history.replaceState(null, '', API_MODE ? `?project=${projectId}&image=${img.id}` : `?image=${img.id}`);
     refreshIcons();
   }
 
@@ -655,7 +1101,7 @@ function initLabelPage() {
     // Ctrl+S / Cmd+S → Save
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      showToast('Saved');
+      saveAction();
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -691,7 +1137,7 @@ function initExportPage() {
   // Đổ danh sách project vào ô chọn (?project=2 thì chọn sẵn project 2)
   const select = document.getElementById('export-project');
   select.innerHTML = PROJECTS.length
-    ? PROJECTS.map(p => `<option value="${p.id}">${p.name}</option>`).join('')
+    ? PROJECTS.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
     : '<option>No projects yet</option>';
   select.disabled = PROJECTS.length === 0;
   if (getQueryParam('project')) select.value = getQueryParam('project');
@@ -790,14 +1236,25 @@ const PAGE_INIT = {
   settings: initSettingsPage,
 };
 
-// Chạy code riêng của trang trước (để tạo HTML từ mock data)...
+// Thứ tự: nạp dữ liệu (từ database nếu có backend) → chạy code riêng của trang
+// (tạo HTML từ dữ liệu) → rồi mới gắn các tương tác chung (để nút vừa tạo cũng được gắn)
 const currentPage = document.body.dataset.page;
-if (PAGE_INIT[currentPage]) PAGE_INIT[currentPage]();
 
-// ...rồi mới gắn các tương tác chung (để nút vừa tạo cũng được gắn)
-highlightSidebar();
-initModals();
-initTabs();
-initToastButtons();
-initSearch();
-refreshIcons();
+async function start() {
+  await loadData();
+  try {
+    if (PAGE_INIT[currentPage]) await PAGE_INIT[currentPage]();
+  } catch (error) {
+    // Có lỗi ở 1 trang thì vẫn để các tương tác chung (sidebar, modal...) chạy bình thường
+    console.error(error);
+    showToast('Something went wrong: ' + error.message, 'error');
+  }
+  highlightSidebar();
+  initModals();
+  initTabs();
+  initToastButtons();
+  initSearch();
+  refreshIcons();
+}
+
+start();

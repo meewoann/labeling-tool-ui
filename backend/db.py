@@ -41,7 +41,7 @@ def connect(db_path=None):
     path = Path(db_path or DEFAULT_DB_PATH)
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    conn = sqlite3.connect(path)
+    conn = sqlite3.connect(path, check_same_thread=False)  # web server chạy request ở nhiều thread
     conn.row_factory = sqlite3.Row            # đọc cột theo tên: row["name"]
     conn.execute("PRAGMA foreign_keys = ON")  # bắt buộc bật thì xoá project mới xoá luôn ảnh
     conn.execute("PRAGMA journal_mode = WAL") # nhiều người đọc cùng lúc không bị khoá
@@ -89,7 +89,8 @@ def list_projects(conn, project_id=None):
                COUNT(i.id)                                  AS total,
                COALESCE(SUM(i.status = 'unlabeled'), 0)     AS unlabeled,
                COALESCE(SUM(i.status = 'labeled'), 0)       AS labeled,
-               COALESCE(SUM(i.status = 'review'), 0)        AS review
+               COALESCE(SUM(i.status = 'review'), 0)        AS review,
+               MIN(i.id)                                    AS cover_image_id
         FROM projects p
         LEFT JOIN images i ON i.project_id = p.id
         {where}
@@ -213,6 +214,39 @@ def list_images(conn, project_id, status=None, limit=50, offset=0):
     sql += " ORDER BY i.id LIMIT ? OFFSET ?"
     params += [limit, offset]
     return conn.execute(sql, params).fetchall()
+
+
+def count_images(conn, project_id, status=None):
+    """Đếm số ảnh của project (lọc theo status nếu truyền)."""
+    sql, params = "SELECT COUNT(*) FROM images WHERE project_id = ?", [project_id]
+    if status is not None:
+        sql += " AND status = ?"
+        params.append(status)
+    return conn.execute(sql, params).fetchone()[0]
+
+
+def get_image(conn, image_id):
+    """Lấy 1 ảnh (kèm full_path). Không thấy thì báo LookupError."""
+    row = conn.execute(
+        """SELECT i.id, i.project_id, i.filename, i.rel_path, i.width, i.height, i.size_bytes,
+                  i.status, i.updated_at, f.name AS folder_name, f.path || '/' || i.rel_path AS full_path
+           FROM images i JOIN folders f ON f.id = i.folder_id WHERE i.id = ?""",
+        (image_id,),
+    ).fetchone()
+    if row is None:
+        raise LookupError(f"Không tìm thấy ảnh #{image_id}")
+    return row
+
+
+def image_window_offset(conn, project_id, image_id, size):
+    """
+    Vị trí bắt đầu (offset) của một "cửa sổ" `size` ảnh có chứa image_id ở giữa.
+    Trang gán nhãn dùng cái này để mở ảnh bất kỳ mà không phải tải cả nghìn ảnh.
+    """
+    position = conn.execute(
+        "SELECT COUNT(*) FROM images WHERE project_id = ? AND id < ?", (project_id, image_id)
+    ).fetchone()[0]
+    return max(0, position - size // 2)
 
 
 def set_status(conn, image_id, status):

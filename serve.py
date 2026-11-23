@@ -35,6 +35,27 @@ class NoCacheHandler(http.server.SimpleHTTPRequestHandler):
         self.send_header("Cache-Control", "no-store")
         super().end_headers()
 
+    def do_GET(self):
+        # Trang web hỏi "có backend không?" (/api/health). Server file tĩnh này trả lời "không"
+        # bằng JSON bình thường, thay vì 404 làm console của trình duyệt báo lỗi đỏ.
+        if self.path.split("?")[0] == "/api/health":
+            body = b'{"ok": false}'
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        super().do_GET()
+
+    def send_head(self):
+        # Không cho tải database, code backend và lịch sử git (quan trọng khi dùng --lan)
+        first_part = self.path.split("?")[0].lstrip("/").split("/")[0]
+        if first_part in ("backend", ".git"):
+            self.send_error(404)
+            return None
+        return super().send_head()
+
 
 def get_lan_ip():
     """Lấy IP của máy này trong mạng nội bộ (không gửi dữ liệu ra ngoài)."""
@@ -46,13 +67,16 @@ def get_lan_ip():
         return None
 
 
-# Cho phép chạy lại ngay sau khi tắt mà không bị lỗi "Address already in use"
-socketserver.TCPServer.allow_reuse_address = True
+class Server(socketserver.ThreadingTCPServer):
+    """Mỗi kết nối chạy ở 1 luồng riêng. Nếu không, trình duyệt mở nhiều kết nối cùng lúc
+    (Chrome hay mở sẵn vài kết nối phụ) sẽ làm trang bị đứng hình."""
+    allow_reuse_address = True  # chạy lại ngay sau khi tắt mà không bị lỗi "Address already in use"
+    daemon_threads = True       # nhấn Ctrl+C là tắt hẳn, không chờ các kết nối còn dang dở
 
 # "127.0.0.1" = chỉ máy này truy cập được; "0.0.0.0" = mọi máy trong mạng đều vào được
 host = "0.0.0.0" if LAN else "127.0.0.1"
 
-with socketserver.TCPServer((host, PORT), NoCacheHandler) as server:
+with Server((host, PORT), NoCacheHandler) as server:
     url = f"http://localhost:{PORT}"
     print(f"Server đang chạy tại {url}  (Ctrl+C để tắt)")
 

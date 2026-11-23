@@ -80,6 +80,9 @@ button { cursor: pointer; background: none; border: none; }
 
 img { display: block; max-width: 100%; }
 
+/* Thuộc tính hidden luôn ẩn phần tử, kể cả khi class của nó có display khác */
+[hidden] { display: none !important; }
+
 h1 { font-size: 24px; font-weight: 600; letter-spacing: -0.02em; }
 h2 { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
 h3 { font-size: 15px; font-weight: 600; }
@@ -931,9 +934,10 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 /* Khung ảnh tỉ lệ 4:3, bounding box đặt bên trong theo % */
 .canvas-stage {
   position: relative;
+  /* width + height do JS đặt theo tỉ lệ ảnh (hàm fitStage trong app.js).
+     Giá trị dưới đây chỉ dùng trong tích tắc trước khi JS chạy. */
   height: calc(100% - 96px);
   aspect-ratio: 4 / 3;
-  max-width: calc(100% - 64px);
   border-radius: 8px;
   overflow: hidden;
   background: #E5E7EB;
@@ -1309,3 +1313,25 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 .error-box h1 { margin-top: 12px; }
 .error-box p { margin: 8px 0 28px; }
 .error-actions { display: flex; justify-content: center; gap: 10px; }
+
+
+/* ----- Thêm cho phần nối database ----- */
+
+/* Project chưa có ảnh: ô bìa trống */
+.cover-empty { width: 100%; height: 100%; display: grid; place-items: center; color: var(--text-light); }
+.cover-empty .lucide { width: 32px; height: 32px; }
+
+/* Nút "Load more" dưới lưới ảnh */
+.load-more { display: flex; justify-content: center; margin-top: 20px; }
+
+/* Ô chọn nhỏ gọn, dùng trong bảng thông tin ảnh */
+.select-sm { width: auto; height: 30px; padding: 0 8px; font-size: 12px; }
+
+/* Tên file dài thì cắt bằng "..." thay vì làm vỡ panel */
+.info-value { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Modal upload */
+.upload-actions { display: flex; justify-content: center; gap: 10px; margin-top: 16px; }
+.upload-progress { margin-top: 16px; }
+.upload-progress .text-small { margin-top: 6px; }
+.path-row { display: flex; gap: 8px; }

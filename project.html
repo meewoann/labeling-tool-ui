@@ -154,6 +154,9 @@
         </div>
         <!-- JS render thumbnail từ mảng IMAGES -->
         <div class="image-grid" id="image-grid"></div>
+        <div class="load-more" id="load-more" hidden>
+          <button class="btn btn-secondary" id="btn-load-more">Load more</button>
+        </div>
       </div>
 
       <!-- Tab Classes -->
@@ -179,28 +182,50 @@
   </div>
 </div>
 
-<!-- ===== MODAL: Upload ảnh (chỉ UI) ===== -->
+<!-- ===== MODAL: Upload ảnh (cần chạy backend: python3 backend/app.py) ===== -->
 <div class="modal-overlay" id="modal-upload">
   <div class="modal">
     <div class="modal-header">
       <div>
         <h2>Upload images</h2>
-        <p class="text-muted">JPG or PNG, up to 20 MB each.</p>
+        <p class="text-muted">JPG, PNG, BMP, WebP or TIFF.</p>
       </div>
       <button class="icon-btn" data-close-modal title="Close"><i data-lucide="x"></i></button>
     </div>
     <div class="modal-body">
       <div class="dropzone">
         <div class="dropzone-icon"><i data-lucide="cloud-upload"></i></div>
-        <p><b>Click to browse</b> or drag and drop files here</p>
-        <p class="text-small text-muted">You can also upload a .zip archive</p>
+        <p><b>Upload a whole folder</b> of images</p>
+        <p class="text-small text-muted">Sub-folders are included. Other file types are ignored.</p>
+        <div class="upload-actions">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-pick-folder"><i data-lucide="upload"></i>Choose folder</button>
+          <button type="button" class="btn btn-secondary btn-sm" id="btn-pick-files"><i data-lucide="images"></i>Choose files</button>
+        </div>
+      </div>
+      <!-- 2 ô chọn file thật, bị ẩn: nút ở trên sẽ "bấm hộ" -->
+      <input type="file" id="input-folder" webkitdirectory multiple hidden>
+      <input type="file" id="input-files" accept="image/*" multiple hidden>
+
+      <!-- Thanh tiến độ, chỉ hiện khi đang upload -->
+      <div class="upload-progress" id="upload-progress" hidden>
+        <div class="progress-row">
+          <div class="progress"><div class="progress-fill" id="upload-bar" style="width: 0%"></div></div>
+          <span class="progress-value" id="upload-percent">0%</span>
+        </div>
+        <p class="text-small text-muted" id="upload-text"></p>
+      </div>
+
+      <div class="form-group" style="margin: 20px 0 0;">
+        <label class="form-label" for="import-path">Or import a folder that is already on the server</label>
+        <div class="path-row">
+          <input class="input" id="import-path" placeholder="/data/images/cam1">
+          <button type="button" class="btn btn-secondary" id="btn-import-path">Import</button>
+        </div>
+        <span class="form-hint">Best for large datasets. Files stay where they are; only their paths are saved.</span>
       </div>
     </div>
     <div class="modal-footer">
-      <button class="btn btn-secondary" data-close-modal>Cancel</button>
-      <button class="btn btn-primary" data-close-modal data-toast="Upload started (demo only)" data-toast-type="success">
-        <i data-lucide="upload"></i>Upload
-      </button>
+      <button class="btn btn-secondary" data-close-modal>Close</button>
     </div>
   </div>
 </div>
