@@ -14,7 +14,7 @@ Chỉ dùng HTML + CSS + JavaScript thuần: không framework, không npm, khôn
 
 | File | Nội dung |
 | --- | --- |
-| `index.html` | Trang vào: tự chuyển sang `projects.html` (chưa có đăng nhập) |
+| `frontend/index.html` | Trang vào: tự chuyển sang `projects.html` (chưa có đăng nhập) |
 | `projects.html` | Thẻ thống kê và lưới project (số ảnh, % đã gán nhãn, lần cập nhật). Nút **New Project** mở modal |
 | `project.html` | Tổng quan 1 project: 4 thẻ thống kê và 3 tab **Images / Classes / Members**, có modal Upload và Add/Edit class |
 | `label.html` | Workspace gán nhãn: thanh công cụ, canvas có bounding box giả, panel class/annotation/thông tin ảnh, dải thumbnail Prev/Next, nút Save, modal phím tắt |
@@ -24,7 +24,7 @@ Chỉ dùng HTML + CSS + JavaScript thuần: không framework, không npm, khôn
 
 ## Cách chạy
 
-Mở trực tiếp file `index.html` bằng trình duyệt (double-click) là chạy được.
+Mở trực tiếp file `frontend/index.html` bằng trình duyệt (double-click) là chạy được.
 Cần có Internet để tải icon (Lucide), font (Inter) và ảnh mẫu (picsum.photos).
 
 Giao diện được thiết kế cho màn hình rộng từ 1280px trở lên.
@@ -33,17 +33,19 @@ Giao diện được thiết kế cho màn hình rộng từ 1280px trở lên.
 
 ```
 labeling-tool-ui/
-├── index.html … 404.html   Mỗi trang là 1 file HTML. Sidebar và top bar được copy y hệt vào từng file
-├── serve.py                Chạy server nhỏ: python3 serve.py rồi mở http://localhost:8000
-├── backend/                Database + API lưu folder ảnh và trạng thái (xem mục "Database" bên dưới)
-├── css/style.css           Toàn bộ CSS. Biến màu (--primary, --bg, --text…) nằm ở đầu file
-├── js/app.js               Toàn bộ JavaScript (xem mục lục ở đầu file)
+├── backend/                  Database + API lưu folder ảnh và trạng thái (xem mục "Database" bên dưới)
+│   └── tests/                Test tự động
+├── frontend/
+│   ├── index.html … 404.html Mỗi trang là 1 file HTML. Sidebar và top bar được copy y hệt vào từng file
+│   ├── css/style.css         Toàn bộ CSS. Biến màu (--primary, --bg, --text…) nằm ở đầu file
+│   ├── js/app.js             Toàn bộ JavaScript (xem mục lục ở đầu file)
+│   └── serve.py              Server nhỏ chỉ phục vụ file tĩnh: python3 frontend/serve.py
 └── README.md
 ```
 
-**`css/style.css`**: muốn đổi màu chủ đạo thì chỉ cần sửa các biến trong `:root` ở đầu file.
+**`frontend/css/style.css`**: muốn đổi màu chủ đạo thì chỉ cần sửa các biến trong `:root` ở đầu file.
 
-**`js/app.js`** gồm 5 phần:
+**`frontend/js/app.js`** gồm 5 phần:
 
 1. **Mock data**: các mảng `DEMO_PROJECTS`, `DEMO_CLASSES`, `DEMO_IMAGES`, `DEMO_MEMBERS`. Mặc định công tắc `USE_DEMO_DATA = false` nên các trang hiện trạng thái trống (chưa upload gì). Đổi thành `true` để xem giao diện với dữ liệu mẫu.
 2. **Helper**: `showToast()`, `openModal()`, `makeSelectable()`…
@@ -76,7 +78,7 @@ Dùng SQLite nên không cần cài gì thêm ngoài Python và thư viện Pill
 | `backend/schema.sql` | Cấu trúc 3 bảng: `projects` → `folders` → `images` |
 | `backend/db.py` | Mọi hàm làm việc với DB: tạo project, import folder, đổi trạng thái, thống kê |
 | `backend/cli.py` | Dùng DB từ dòng lệnh |
-| `backend/test_db.py` | Test tự động (`cd backend && python3 -m unittest -v`) |
+| `backend/tests/` | Test tự động (`cd backend && python3 -m unittest -v`) |
 
 DB chỉ nhớ **đường dẫn** tới folder ảnh trên máy chủ, không copy ảnh. Vì vậy đừng đổi tên
 hoặc di chuyển folder sau khi đã import. Import lại cùng một folder chỉ thêm những ảnh mới,
@@ -120,13 +122,13 @@ Sau khi đăng nhập, trên giao diện bạn có thể:
   (`unlabeled` / `labeled` / `review`) bằng ô chọn hoặc nút **Submit for review**.
 
 Không chạy backend thì giao diện vẫn mở được như trước (trống, hoặc có dữ liệu mẫu nếu đặt
-`USE_DEMO_DATA = true` trong `js/app.js`). Lúc đó nút Upload sẽ báo cần chạy backend.
+`USE_DEMO_DATA = true` trong `frontend/js/app.js`). Lúc đó nút Upload sẽ báo cần chạy backend.
 
 | File | Làm gì |
 | --- | --- |
 | `backend/app.py` | Web server + API (FastAPI): đăng nhập, project, upload, import, ảnh, thumbnail, trạng thái |
 | `backend/auth.py` | Băm mật khẩu, tài khoản, phiên đăng nhập, khoá đăng nhập sai |
-| `backend/test_api.py` | Test API qua HTTP thật (đăng nhập, phân quyền, luồng chính) |
+| `backend/tests/test_api.py` | Test API qua HTTP thật (đăng nhập, phân quyền, luồng chính) |
 
 Biến môi trường (không bắt buộc): `LABELKIT_DB` (file database), `LABELKIT_UPLOAD_DIR` (nơi lưu ảnh
 upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho import folder nằm trong thư mục này).
@@ -136,7 +138,7 @@ upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho
 - Mọi đường dẫn `/api/` đều yêu cầu đăng nhập, trừ vài đường dẫn công khai (`/api/health`, `/api/auth/...`).
 - Phiên đăng nhập dùng cookie `HttpOnly` + `SameSite=Lax` (JavaScript không đọc được cookie, trang web khác không gửi lệnh thay bạn được). Phiên hết hạn sau 14 ngày.
 - Đăng nhập sai 5 lần liên tiếp thì bị khoá vài phút. Thông báo lỗi giống nhau dù username có tồn tại hay không.
-- Trang `/docs` và `/openapi.json` của FastAPI đã tắt. Server chỉ phục vụ các trang HTML, `css/` và `js/`;
+- Trang `/docs` và `/openapi.json` của FastAPI đã tắt. Server chỉ phục vụ các trang HTML, `css/` và `js/` trong `frontend/`;
   file database và code backend không tải được qua web.
 
 **Còn cần lưu ý:**
@@ -166,7 +168,7 @@ Chi tiết (sao lưu, quyền ghi thư mục) xem [README tiếng Anh](../README
 
 ```bash
 python3 backend/app.py --lan     # bản có database
-python3 serve.py --lan           # chỉ file tĩnh, không database
+python3 frontend/serve.py --lan  # chỉ file tĩnh, không database
 ```
 
-Terminal sẽ in ra địa chỉ để gửi cho người cùng mạng (với `serve.py` là link dạng `http://192.168.x.x:8000`).
+Terminal sẽ in ra địa chỉ để gửi cho người cùng mạng (với `frontend/serve.py` là link dạng `http://192.168.x.x:8000`).

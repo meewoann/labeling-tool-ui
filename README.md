@@ -22,7 +22,7 @@ Upload folders of images, track what is labeled, keep everything in one SQLite f
 - **Per-image status.** `unlabeled`, `labeled` or `review`, with filters, progress bars and thumbnails.
 - **Accounts.** Username and password, admins manage the team. Passwords are hashed with scrypt, failed logins are rate limited, sessions use HttpOnly cookies.
 - **Nothing to install but Python.** One process and one SQLite file. No Docker, no Node, no build step; the UI is plain HTML, CSS and JavaScript.
-- **Try it without the backend.** Open `index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `js/app.js` to fill it with sample data).
+- **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data).
 
 ## Screenshots
 
@@ -90,16 +90,20 @@ python3 backend/cli.py user passwd alex      # reset a password, even if you are
 ## Project layout
 
 ```
-Dockerfile, docker-compose.yml   run it in a container
-index.html … settings.html   one HTML file per page
-css/style.css                all styles (colors are variables at the top)
-js/app.js                    all front-end code
 backend/
-  app.py                     FastAPI app: API + serves the pages
-  db.py, schema.sql          SQLite access and tables
-  auth.py                    password hashing, sessions, login limiter
-  cli.py                     command line tool
-  test_*.py                  tests (also run on GitHub Actions)
+  app.py                 FastAPI app: the API, and serves the pages
+  db.py, schema.sql      SQLite access and tables
+  auth.py                password hashing, sessions, login limiter
+  cli.py                 command line tool
+  tests/                 unit and HTTP tests
+frontend/                plain HTML, CSS and JavaScript, no build step
+  index.html … 404.html  one file per page
+  css/style.css          all styles (colors are variables at the top)
+  js/app.js              all front-end code
+  serve.py               tiny static server for the UI-only prototype
+docs/                    screenshots and the Vietnamese README
+.github/workflows/       CI: tests and a Docker build check
+Dockerfile, docker-compose.yml
 ```
 
 Run the tests with `cd backend && python3 -m unittest -v`.
