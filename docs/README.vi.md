@@ -28,7 +28,7 @@ Upload folder ảnh, vẽ bounding box và polygon, lưu tất cả trong một 
 - **Lưu an toàn.** Tọa độ lưu dạng chuẩn hoá 0–1 nên đúng ở mọi độ phân giải. Chuyển ảnh sẽ tự lưu trước. Hai người cùng sửa một ảnh thì lần lưu sau bị từ chối, không ghi đè âm thầm lên người trước.
 - **Trạng thái từng ảnh.** `unlabeled`, `labeled` hoặc `review` (có annotation đầu tiên thì ảnh tự thành labeled), kèm bộ lọc, thanh tiến độ và thumbnail.
 - **Tài khoản.** Username và mật khẩu, admin quản lý team. Mật khẩu băm bằng scrypt, đăng nhập sai nhiều lần bị khoá tạm, phiên dùng cookie HttpOnly.
-- **Kiểm tra GPU.** **Settings → This device** cho biết GPU của máy bạn đang dùng và trình duyệt có chạy được model AI trên đó không (WebGPU, WebGL hay chỉ render bằng phần mềm). Phát hiện ngay trong trình duyệt, không gửi gì lên server. Đây là bước chuẩn bị cho việc gán nhãn gợi ý bằng model.
+- **Kiểm tra GPU.** **Settings → This device** cho biết GPU của máy bạn đang dùng và trình duyệt có chạy được model AI trên đó không (WebGPU, WebGL hay chỉ render bằng phần mềm). Phát hiện ngay trong trình duyệt, không gửi gì lên server. Firefox cố ý giấu model card (nó báo một card chung chung như "GTX 980, or similar"), thẻ sẽ nói rõ điều đó thay vì đoán. Đây là bước chuẩn bị cho việc gán nhãn gợi ý bằng model.
 - **Chỉ cần Python.** Một tiến trình và một file SQLite. Không Node, không bước build; giao diện là HTML, CSS, JavaScript thuần. Có sẵn cấu hình Docker nếu bạn muốn dùng.
 - **Thử không cần backend.** Mở `frontend/index.html` để xem giao diện bấm được (đặt `USE_DEMO_DATA = true` trong `frontend/js/app.js` để có dữ liệu mẫu). Ở chế độ này vẽ được nhưng hình chỉ nằm trong bộ nhớ.
 

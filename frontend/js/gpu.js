@@ -23,6 +23,12 @@ var SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|lavapipe|software|basic r
    3. Làm gọn tên card
    ---------------------------------------------------------- */
 
+// Firefox cố ý báo tên card CHUNG CHUNG để chống theo dõi, vd "NVIDIA GeForce GTX 980, or similar"
+// (dù máy thật là RTX 3060). Tên kiểu này không phải card của người dùng nên không được hiện như thật.
+function isMaskedRenderer(raw) {
+  return /, or similar$/i.test(String(raw || '').trim());
+}
+
 // Trình duyệt hay trả về dạng dài "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)".
 // Hàm này giữ lại phần tên card: "NVIDIA GeForce RTX 3060".
 function cleanRenderer(raw) {
@@ -88,17 +94,21 @@ function classifyGpu(info) {
 }
 
 var VENDOR_NAMES = { nvidia: 'NVIDIA', amd: 'AMD', intel: 'Intel', apple: 'Apple', arm: 'Arm', qualcomm: 'Qualcomm' };
+var MASKED_SUFFIX = ' (exact model hidden by the browser)';
 
 // Tên card để hiển thị. Thứ tự ưu tiên (tên đầy đủ nhất trước):
 //   1. tên WebGL của card thật, vd "NVIDIA GeForce RTX 3060"
 //   2. mô tả của WebGPU, nếu có (trình duyệt thật thường để trống)
 //   3. hãng + kiến trúc của WebGPU, vd "NVIDIA (ampere)"  (WebGPU thường chỉ cho thông tin này, không có tên model)
-//   4. tên WebGL của card "phần mềm", vd SwiftShader
+//   4. nếu trình duyệt báo tên chung chung (Firefox): chỉ nói hãng và rằng model bị giấu
+//   5. tên WebGL của card "phần mềm", vd SwiftShader
 function gpuDisplayName(info) {
   var webgpu = info && info.webgpu;
   var webgl = info && info.webgl;
-  var webglName = webgl && webgl.renderer ? cleanRenderer(webgl.renderer) : '';
-  var realWebgl = webglName && !SOFTWARE_RENDERER.test(webglName);
+  var rawName = webgl && webgl.renderer ? webgl.renderer : '';
+  var webglName = rawName ? cleanRenderer(rawName) : '';
+  var masked = isMaskedRenderer(rawName);
+  var realWebgl = webglName && !masked && !SOFTWARE_RENDERER.test(webglName);
   var realWebgpu = webgpu && webgpu.supported && !webgpu.fallback;
 
   if (realWebgl) return webglName;
@@ -107,9 +117,23 @@ function gpuDisplayName(info) {
     var vendor = VENDOR_NAMES[String(webgpu.vendor).toLowerCase()] || webgpu.vendor;
     return vendor && webgpu.architecture ? vendor + ' (' + webgpu.architecture + ')' : (vendor || webgpu.architecture);
   }
+  if (masked) return webglName.split(' ')[0] + MASKED_SUFFIX;   // chỉ chắc chắn về hãng (chữ đầu của tên)
   if (webglName) return webglName;
   if (webgl && webgl.hidden) return 'Hidden by your browser';
   return 'Not detected';
+}
+
+// Câu giải thích hiện dưới dòng GPU khi tên card không đáng tin (rỗng nếu không cần)
+function gpuNameNote(info) {
+  var name = gpuDisplayName(info);
+  if (name.slice(-MASKED_SUFFIX.length) === MASKED_SUFFIX) {
+    return 'Your browser reports a generic GPU name on purpose, as a privacy protection, so the exact model cannot be shown. ' +
+           'Chrome and Edge show it. In Firefox this is the webgl.sanitize-unmasked-renderer setting in about:config.';
+  }
+  if (name === 'Hidden by your browser') {
+    return 'Your browser does not tell websites which GPU you have.';
+  }
+  return '';
 }
 
 
@@ -130,6 +154,7 @@ function readWebgl() {
       vendor: ext ? gl.getParameter(ext.UNMASKED_VENDOR_WEBGL) : null,
       renderer: ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null,
       hidden: !ext,
+      masked: !!ext && isMaskedRenderer(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)),
       maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
     };
   } catch (e) {
@@ -172,10 +197,12 @@ async function detectGpu() {
   };
   info.verdict = classifyGpu(info);
   info.name = gpuDisplayName(info);
+  info.nameNote = gpuNameNote(info);
   return info;
 }
 
 // Để test bằng Node (trình duyệt không có "module" nên dòng này bị bỏ qua)
 if (typeof module !== 'undefined' && module.exports) {
-  module.exports = { cleanRenderer: cleanRenderer, classifyGpu: classifyGpu, gpuDisplayName: gpuDisplayName };
+  module.exports = { cleanRenderer: cleanRenderer, classifyGpu: classifyGpu, gpuDisplayName: gpuDisplayName,
+                     isMaskedRenderer: isMaskedRenderer, gpuNameNote: gpuNameNote };
 }

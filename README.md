@@ -25,7 +25,7 @@ Upload folders of images, draw boxes and polygons, and keep everything in one SQ
 - **Safe saving.** Coordinates are stored normalized (0–1), so they stay correct at any resolution. Changing image saves first, and if two people edit the same image the second save is refused instead of silently overwriting the first.
 - **Per-image status.** `unlabeled`, `labeled` or `review` (the first annotation marks an image as labeled), with filters, progress bars and thumbnails.
 - **Accounts.** Username and password, admins manage the team. Passwords are hashed with scrypt, failed logins are rate limited, sessions use HttpOnly cookies.
-- **GPU check.** **Settings → This device** shows the GPU of the machine you are using and whether the browser can run AI models on it (WebGPU, WebGL or only software rendering). It is detected in the browser and nothing is sent to the server. It prepares the ground for model-assisted labeling.
+- **GPU check.** **Settings → This device** shows the GPU of the machine you are using and whether the browser can run AI models on it (WebGPU, WebGL or only software rendering). It is detected in the browser and nothing is sent to the server. Firefox hides the exact model on purpose (it reports a generic card such as "GTX 980, or similar"), and the card says so instead of guessing. It prepares the ground for model-assisted labeling.
 - **Nothing to install but Python.** One process and one SQLite file. No Node, no build step; the UI is plain HTML, CSS and JavaScript. A Docker setup is included if you prefer it.
 - **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data). Shapes can be drawn there but are only kept in memory.
 

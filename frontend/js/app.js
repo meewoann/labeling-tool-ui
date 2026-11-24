@@ -1632,7 +1632,7 @@ async function initDeviceCard() {
     ? 'Yes' + (webgpu.fallback ? ' (software fallback)' : '') + (webgpu.architecture ? ` · ${webgpu.architecture}` : '')
     : `No${webgpu.reason ? ` · ${webgpu.reason}` : ''}`;
   const webglText = info.webgl ? `WebGL ${info.webgl.version}` : 'No';
-  const memoryText = info.memoryGb ? `${info.memoryGb} GB${info.memoryGb >= 8 ? ' or more' : ''}` : 'Unknown';
+  const memoryText = info.memoryGb ? `${info.memoryGb} GB${info.memoryGb >= 8 ? ' or more' : ''}` : 'Not reported by this browser';
   const rows = [
     ['GPU', info.name],
     ['WebGPU', webgpuText],
@@ -1657,6 +1657,7 @@ async function initDeviceCard() {
     </div>
     ${rows.map(([label, value]) => `
       <div class="info-row"><span>${label}</span><span class="device-value">${esc(value)}</span></div>`).join('')}
+    ${info.nameNote ? `<p class="text-small text-muted device-note">${esc(info.nameNote)}</p>` : ''}
     <details class="device-raw">
       <summary>Raw values from the browser</summary>
       <pre>${esc(rawLines.join('\n'))}</pre>

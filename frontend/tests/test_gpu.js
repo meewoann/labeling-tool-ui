@@ -2,7 +2,7 @@
    Chạy:  node frontend/tests/test_gpu.js   (thoát với mã khác 0 nếu có test hỏng) */
 
 const assert = require('assert');
-const { cleanRenderer, classifyGpu, gpuDisplayName } = require('../js/gpu.js');
+const { cleanRenderer, classifyGpu, gpuDisplayName, isMaskedRenderer, gpuNameNote } = require('../js/gpu.js');
 
 let passed = 0;
 function test(name, fn) {
@@ -69,5 +69,27 @@ test('tên: lấy từ WebGL khi không có WebGPU', () => assert.strictEqual(
 test('tên: trình duyệt ẩn thông tin', () => assert.strictEqual(
   gpuDisplayName({ webgl: { version: 1, renderer: null, hidden: true }, webgpu: null }), 'Hidden by your browser'));
 test('tên: không phát hiện được', () => assert.strictEqual(gpuDisplayName({ webgl: null, webgpu: null }), 'Not detected'));
+
+// ---- Firefox báo tên card chung chung ----
+const masked = (name, extra) => Object.assign({ webgl: { version: 2, renderer: name, hidden: false }, webgpu: { supported: false } }, extra);
+test('nhận ra tên bị che', () => {
+  assert.ok(isMaskedRenderer('NVIDIA GeForce GTX 980, or similar'));
+  assert.ok(isMaskedRenderer('Intel(R) HD Graphics, or similar'));
+  assert.ok(!isMaskedRenderer('NVIDIA GeForce RTX 3060/PCIe/SSE2'));
+  assert.ok(!isMaskedRenderer('') && !isMaskedRenderer(null));
+});
+test('tên bị che: không hiện "GTX 980" như thật mà nói model bị giấu', () => assert.strictEqual(
+  gpuDisplayName(masked('NVIDIA GeForce GTX 980, or similar')), 'NVIDIA (exact model hidden by the browser)'));
+test('tên bị che + WebGPU có kiến trúc → dùng thông tin thật của WebGPU', () => assert.strictEqual(
+  gpuDisplayName(masked('NVIDIA GeForce GTX 980, or similar', { webgpu: { supported: true, fallback: false, vendor: 'nvidia', architecture: 'ampere', description: '' } })), 'NVIDIA (ampere)'));
+test('tên bị che + WebGPU có mô tả → dùng mô tả', () => assert.strictEqual(
+  gpuDisplayName(masked('NVIDIA GeForce GTX 980, or similar', { webgpu: gpuOk })), 'NVIDIA GeForce RTX 3060'));
+test('tên bị che vẫn kết luận là có GPU thật (webgl)', () => assert.strictEqual(classifyGpu(masked('NVIDIA GeForce GTX 980, or similar')).level, 'webgl'));
+test('ghi chú: có khi tên bị che, rỗng khi tên thật', () => {
+  assert.ok(/privacy/.test(gpuNameNote(masked('NVIDIA GeForce GTX 980, or similar'))));
+  assert.strictEqual(gpuNameNote(masked('NVIDIA GeForce RTX 3060/PCIe/SSE2')), '');
+  assert.strictEqual(gpuNameNote(masked('NVIDIA GeForce GTX 980, or similar', { webgpu: gpuOk })), '');   // đã có tên thật từ WebGPU
+  assert.ok(gpuNameNote({ webgl: { version: 1, renderer: null, hidden: true }, webgpu: null }).length > 0);
+});
 
 console.log(`\n${passed} tests passed` + (process.exitCode ? ' (có test hỏng)' : ''));
