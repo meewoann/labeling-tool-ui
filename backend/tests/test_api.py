@@ -388,5 +388,77 @@ class ClassApiTests(ApiTestCase):
         self.assertEqual([c["name"] for c in admin.get(base)[1]], ["Person"])
 
 
+class AnnotationApiTests(ApiTestCase):
+    BOX = {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4}
+
+    def project_with_image(self, client, name):
+        """Tạo project, 1 class, 1 ảnh qua API. Trả về (project_id, class_id, image_id)."""
+        pid = client.post("/api/projects", {"name": name})[1]["id"]
+        class_id = client.post(f"/api/projects/{pid}/classes", {"name": "car", "color": "#3B82F6"})[1]["id"]
+        path = Path(self.tmp.name) / f"{name}.jpg"
+        Image.new("RGB", (40, 30), "green").save(path)
+        body, headers = multipart([("folder", "pics"), ("paths", "a.jpg")], [("files", "a.jpg", path.read_bytes())])
+        client.post(f"/api/projects/{pid}/upload", raw=body, headers=headers)
+        client.post(f"/api/projects/{pid}/upload/finish", {"folder": "pics"})
+        image_id = client.get(f"/api/projects/{pid}/images")[1]["items"][0]["id"]
+        return pid, class_id, image_id
+
+    def test_annotations_require_login(self):
+        admin = self.make_admin_client("ann-admin0")
+        _, class_id, image_id = self.project_with_image(admin, "Ann auth")
+        path = f"/api/images/{image_id}/annotations"
+        self.assertEqual(self.anon.get(path)[0], 401)
+        body = {"base_version": 0, "annotations": [{"class_id": class_id, "type": "bbox", "data": self.BOX}]}
+        self.assertEqual(self.anon.request("PUT", path, body=body)[0], 401)
+        self.assertEqual(admin.get(path)[1]["annotations"], [])     # và không bị ghi gì
+
+    def test_save_load_and_counts(self):
+        admin = self.make_admin_client("ann-admin1")
+        pid, class_id, image_id = self.project_with_image(admin, "Ann basic")
+        path = f"/api/images/{image_id}/annotations"
+        self.assertEqual(admin.get(path)[1], {"version": 0, "status": "unlabeled", "annotations": []})
+
+        shapes = [{"class_id": class_id, "type": "bbox", "data": self.BOX},
+                  {"class_id": class_id, "type": "polygon", "data": {"points": [[0.1, 0.1], [0.6, 0.1], [0.3, 0.7]]}}]
+        status, saved, _ = admin.request("PUT", path, body={"base_version": 0, "annotations": shapes})
+        self.assertEqual((status, saved["version"], saved["status"], len(saved["annotations"])), (200, 1, "labeled", 2))
+        self.assertEqual(admin.get(path)[1]["annotations"][0]["data"], self.BOX)
+
+        item = admin.get(f"/api/projects/{pid}/images")[1]["items"][0]
+        self.assertEqual((item["annotation_count"], item["status"]), (2, "labeled"))
+        self.assertEqual(admin.get(f"/api/projects/{pid}/classes")[1][0]["annotation_count"], 2)
+
+        # Xoá class kéo theo annotation và báo số lượng
+        status, result, _ = admin.request("DELETE", f"/api/classes/{class_id}")
+        self.assertEqual((status, result["deleted_annotations"]), (200, 2))
+        self.assertEqual(admin.get(path)[1]["annotations"], [])
+
+    def test_bad_input_and_conflicts(self):
+        admin = self.make_admin_client("ann-admin2")
+        _, class_id, image_id = self.project_with_image(admin, "Ann errors")
+        path = f"/api/images/{image_id}/annotations"
+        put = lambda annotations, version=0: admin.request("PUT", path, body={"base_version": version, "annotations": annotations})
+
+        status, body, _ = put([{"class_id": class_id, "type": "bbox", "data": {**self.BOX, "x": 2}}])
+        self.assertEqual(status, 400)
+        self.assertIn("Annotation 1", body["detail"])
+        self.assertEqual(put([{"class_id": class_id, "type": "circle", "data": self.BOX}])[0], 400)
+        self.assertEqual(put([{"class_id": 99999, "type": "bbox", "data": self.BOX}])[0], 400)
+        self.assertEqual(admin.request("PUT", path, body={"annotations": []})[0], 422)             # thiếu base_version
+        self.assertEqual(admin.request("PUT", path, body={"base_version": 0, "annotations": [{"type": "bbox"}]})[0], 422)
+        self.assertEqual(admin.request("PUT", "/api/images/99999/annotations", body={"base_version": 0, "annotations": []})[0], 404)
+        self.assertEqual(admin.get("/api/images/99999/annotations")[0], 404)
+        self.assertEqual(admin.get(path)[1]["version"], 0)           # không lần nào ở trên làm đổi dữ liệu
+
+        # Hai người cùng mở ở version 0: người thứ hai lưu bị chặn
+        other = self.make_admin_client("ann-admin2b")
+        ok = [{"class_id": class_id, "type": "bbox", "data": self.BOX}]
+        self.assertEqual(put(ok)[0], 200)
+        status, body, _ = other.request("PUT", path, body={"base_version": 0, "annotations": []})
+        self.assertEqual(status, 409)
+        self.assertEqual(len(admin.get(path)[1]["annotations"]), 1)  # annotation của người đầu còn nguyên
+        self.assertEqual(other.request("PUT", path, body={"base_version": 1, "annotations": []})[0], 200)
+
+
 if __name__ == "__main__":
     unittest.main()
