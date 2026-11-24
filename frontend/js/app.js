@@ -169,6 +169,8 @@ function mockImage(img) {
     thumbUrl: imageUrl(img.seed, 320, 240),
     fileUrl: imageUrl(img.seed, 800, 600),
     ratio: 4 / 3,
+    width: Number(img.size.split(' × ')[0]),
+    height: Number(img.size.split(' × ')[1]),
     meta: `${img.boxes.length} ${img.boxes.length === 1 ? 'box' : 'boxes'}`,
   };
 }
@@ -203,7 +205,9 @@ function imageFromApi(i) {
     thumbUrl: i.thumb_url,
     fileUrl: i.file_url,
     ratio: i.width / i.height,   // tỉ lệ rộng / cao của ảnh
-    meta: `${i.width} × ${i.height}`,
+    width: i.width,
+    height: i.height,
+    meta: i.annotation_count ? `${i.annotation_count} ${i.annotation_count === 1 ? 'object' : 'objects'}` : `${i.width} × ${i.height}`,
   };
 }
 
@@ -233,16 +237,25 @@ async function api(path, options = {}) {
     redirectToLogin();
     return new Promise(() => {});
   }
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) {
+    const error = new Error(await errorMessage(response));
+    error.status = response.status;   // để nơi gọi phân biệt được lỗi (vd: 409 = xung đột khi lưu)
+    throw error;
+  }
   return response.json();
 }
 
-function apiPost(path, body) {
+// Gửi JSON bằng phương thức bất kỳ (POST, PUT, PATCH...)
+function apiSend(method, path, body) {
   return api(path, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+}
+
+function apiPost(path, body) {
+  return apiSend('POST', path, body);
 }
 
 // Có backend không? Mở file trực tiếp (file://) hoặc server chỉ có file tĩnh thì không có /api
@@ -416,6 +429,11 @@ function initTabs() {
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
       });
     });
+
+    // Link kiểu project.html?id=1&tab=classes mở sẵn đúng tab
+    const wanted = getQueryParam('tab');
+    const target = Array.from(buttons).find(btn => btn.dataset.tab === wanted);
+    if (target) target.click();
   });
 }
 
@@ -1032,6 +1050,7 @@ function initUpload(projectId, onDone) {
 
 /* ---------- label.html: Workspace gán nhãn ---------- */
 async function initLabelPage() {
+  // ----- 1. Nạp ảnh và class -----
   // Có backend: nạp 1 "cửa sổ" tối đa 200 ảnh của project từ database, ảnh được bấm nằm ở giữa
   let projectName = 'Street Traffic Detection'; // chỉ dùng cho dữ liệu mẫu
   let projectId = 0;
@@ -1053,6 +1072,7 @@ async function initLabelPage() {
         IMAGES = data.items.map(imageFromApi);
         windowOffset = data.offset;
         windowTotal = data.total;
+        CLASSES = await api(`/api/projects/${projectId}/classes`);
         const project = PROJECTS.find(p => p.id === projectId);
         if (project) projectName = project.name;
       } catch (error) {
@@ -1070,115 +1090,111 @@ async function initLabelPage() {
     return;
   }
 
-  // Trạng thái hiện tại của trang
+  // ----- 2. Trạng thái của trang -----
   const startId = Number(getQueryParam('image'));
   let currentIndex = Math.max(0, IMAGES.findIndex(img => img.id === startId)); // không tìm thấy (-1) → 0
   let currentTool = 'select';
-  let selectedClassId = CLASSES.length ? CLASSES[0].id : null; // database chưa có class nên có thể là null
-  let zoom = 1;
+  let currentClassId = CLASSES.length ? CLASSES[0].id : null;   // class dùng cho hình sắp vẽ
+  let version = 0;          // phiên bản annotation của ảnh đang mở (gửi kèm khi lưu để phát hiện xung đột)
+  let dirty = false;        // có thay đổi chưa lưu không
+  let editCount = 0;        // đếm số lần sửa, để biết có ai sửa thêm trong lúc đang lưu không
+  let saving = false;
+  let loadFailed = false;   // không tải được annotation của ảnh: cấm lưu để khỏi ghi đè dữ liệu có sẵn
+  let openToken = 0;        // đánh số mỗi lần mở ảnh, để bỏ kết quả của lần mở đã cũ
+  let navigating = false;
 
   const TOOL_NAMES = { select: 'Select', bbox: 'Bounding box', polygon: 'Polygon', pan: 'Pan', zoom: 'Zoom' };
+  const stage = document.getElementById('canvas-stage');
+  const area = document.querySelector('.canvas-area');
+  const strip = document.getElementById('thumb-strip');
+  const list = document.getElementById('annotation-list');
+  const classPicker = document.getElementById('class-picker');
 
   document.getElementById('label-project-name').textContent = projectName;
-  if (projectId) document.getElementById('btn-back').href = `project.html?id=${projectId}`;
-
-  // ----- Thanh công cụ bên trái -----
-  const toolButtons = document.querySelectorAll('.tool-btn');
-  makeSelectable(toolButtons, btn => {
-    currentTool = btn.dataset.tool;
-    updateHint();
-  });
-
-  // ----- Danh sách class bên phải -----
-  const classPicker = document.getElementById('class-picker');
-  classPicker.innerHTML = CLASSES.length ? CLASSES.map((c, i) => `
-    <button class="class-item ${c.id === selectedClassId ? 'active' : ''}" data-class-id="${c.id}">
-      <span class="class-dot" style="background:${c.color}"></span>
-      <span>${esc(c.name)}</span>
-      <kbd>${i + 1}</kbd>
-    </button>`).join('') : '<p class="empty-text">No classes yet.</p>';
-  const classButtons = classPicker.querySelectorAll('.class-item');
-  makeSelectable(classButtons, btn => {
-    selectedClassId = Number(btn.dataset.classId);
-    updateHint();
-  });
-
-  // ----- Dải thumbnail phía dưới -----
-  const strip = document.getElementById('thumb-strip');
-  strip.innerHTML = IMAGES.map((img, i) => `
-    <button class="thumb" data-index="${i}" title="${esc(img.name)}">
-      <img src="${img.thumbUrl}" alt="${esc(img.name)}" loading="lazy">
-      <span class="thumb-dot dot-${img.status}"></span>
-    </button>`).join('');
-  strip.querySelectorAll('.thumb').forEach(thumb => {
-    thumb.addEventListener('click', () => showImage(Number(thumb.dataset.index)));
-  });
-
-  // ----- Các nút -----
-  document.getElementById('btn-prev').addEventListener('click', () => showImage(currentIndex - 1));
-  document.getElementById('btn-next').addEventListener('click', () => showImage(currentIndex + 1));
-  document.getElementById('btn-save').addEventListener('click', saveAction);
-
-  // Annotation chưa lưu được vào database, nên ở chế độ có backend nói thẳng cho đỡ nhầm
-  function saveAction() {
-    if (API_MODE) showToast('Annotations are not saved yet. Status changes are saved automatically.', 'info');
-    else showToast('Saved');
+  if (projectId) {
+    document.getElementById('btn-back').href = `project.html?id=${projectId}`;
+    document.getElementById('link-manage-classes').href = `project.html?id=${projectId}&tab=classes`;
   }
 
-  // "Submit for review": có backend thì đổi trạng thái ảnh thành review
-  document.getElementById('btn-submit-review').addEventListener('click', () => {
-    if (API_MODE) changeStatus('review');
-    else showToast('Image sent for review (demo only)');
-  });
+  // ----- 3. Nơi lưu annotation -----
+  // Có backend: gọi API. Không có backend: giữ trong bộ nhớ (tải lại trang là mất), để vẫn thử vẽ được.
+  const annotationStore = API_MODE ? {
+    load: img => api(`/api/images/${img.id}/annotations`),
+    save: (img, baseVersion, annotations) =>
+      apiSend('PUT', `/api/images/${img.id}/annotations`, { base_version: baseVersion, annotations }),
+  } : {
+    async load(img) {
+      if (!img.annotations) {   // dữ liệu mẫu cũ dùng % → đổi sang toạ độ 0..1
+        img.annotations = img.boxes.map(b => ({
+          class_id: b.classId, type: 'bbox', data: { x: b.x / 100, y: b.y / 100, w: b.w / 100, h: b.h / 100 },
+        }));
+      }
+      return { version: 0, status: img.status, annotations: img.annotations };
+    },
+    async save(img, baseVersion, annotations) {
+      img.annotations = annotations;
+      return { version: baseVersion + 1, status: img.status, annotations };
+    },
+  };
 
-  // Đổi trạng thái của ảnh đang xem và lưu vào database
-  async function changeStatus(status) {
+  // ----- 4. Bộ vẽ -----
+  const annotator = createAnnotator({
+    area, stage,
+    svg: document.getElementById('annotation-svg'),
+    getClass: findClass,
+    onChange: () => {            // vẽ / sửa / xoá / undo đều đi qua đây
+      dirty = true;
+      editCount++;
+      renderAnnotationList();
+      updateToolbarState();
+    },
+    onSelect: () => renderAnnotationList(),
+    onViewChange: zoom => { document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%'; },
+    onNeedClass: () => showToast('Add a class first: open the project page and use the Classes tab', 'info'),
+  });
+  annotator.setCurrentClass(currentClassId);
+
+  // ----- 5. Vẽ các phần của giao diện -----
+  function renderClassPicker() {
+    classPicker.innerHTML = CLASSES.length ? CLASSES.map((c, i) => `
+      <button class="class-item ${c.id === currentClassId ? 'active' : ''}" data-class-id="${c.id}">
+        <span class="class-dot" style="background:${c.color}"></span>
+        <span>${esc(c.name)}</span>
+        ${i < 9 ? `<kbd>${i + 1}</kbd>` : ''}
+      </button>`).join('') : '<p class="empty-text">No classes yet. Use <b>Manage</b> to add some.</p>';
+  }
+
+  function renderAnnotationList() {
+    const items = annotator.list();
+    const selected = annotator.getSelected();
     const img = IMAGES[currentIndex];
-    if (img.status === status) return;
-    try {
-      await api(`/api/images/${img.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status }),
-      });
-    } catch (error) {
-      showToast(error.message, 'error');
-      showImage(currentIndex); // vẽ lại để ô chọn trạng thái quay về giá trị cũ
+    document.getElementById('annotation-count').textContent = items.length;
+    if (items.length === 0) {
+      list.innerHTML = '<p class="empty-text">No annotations yet. Pick the <b>Bounding box</b> tool (B) and drag on the image.</p>';
       return;
     }
-    img.status = status;
-    strip.querySelectorAll('.thumb-dot')[currentIndex].className = `thumb-dot dot-${status}`;
-    showImage(currentIndex);
-    showToast(`Marked as ${STATUS_TEXT[status].toLowerCase()}`);
+    list.innerHTML = items.map((a, i) => {
+      const cls = findClass(a.class_id);
+      const detail = a.type === 'bbox'
+        ? `Box · ${Math.round(a.data.w * img.width)} × ${Math.round(a.data.h * img.height)} px`
+        : `Polygon · ${a.data.points.length} points`;
+      return `
+        <div class="annotation-item ${a.uid === selected ? 'active' : ''}" data-uid="${a.uid}">
+          <span class="class-dot" style="background:${cls ? cls.color : '#6B7280'}"></span>
+          <div class="annotation-item-main">
+            <p>${esc(cls ? cls.name : 'Unknown class')}</p>
+            <p class="text-small text-muted">${detail}</p>
+          </div>
+          <span class="annotation-id">#${i + 1}</span>
+          <button class="icon-btn annotation-delete" data-delete-uid="${a.uid}" title="Delete (Del)"><i data-lucide="trash-2"></i></button>
+        </div>`;
+    }).join('');
+    refreshIcons();
   }
-
-  // Khung ảnh luôn có ĐÚNG tỉ lệ của ảnh và to nhất có thể trong vùng canvas
-  // (để ảnh không bị cắt, và sau này vẽ box theo % mới khớp với ảnh)
-  const stage = document.getElementById('canvas-stage');
-  let stageRatio = 4 / 3;
-  function fitStage() {
-    const area = document.querySelector('.canvas-area');
-    const maxWidth = area.clientWidth - 64;
-    const maxHeight = area.clientHeight - 96;
-    const width = Math.min(maxWidth, maxHeight * stageRatio);
-    stage.style.width = width + 'px';
-    stage.style.height = (width / stageRatio) + 'px';
-  }
-  window.addEventListener('resize', fitStage);
-
-  // Zoom: chỉ phóng to/thu nhỏ khung ảnh bằng CSS transform
-  function setZoom(value) {
-    zoom = Math.min(3, Math.max(0.5, value)); // giới hạn 50% – 300%
-    stage.style.transform = `scale(${zoom})`;
-    document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%';
-  }
-  document.getElementById('btn-zoom-in').addEventListener('click', () => setZoom(zoom + 0.25));
-  document.getElementById('btn-zoom-out').addEventListener('click', () => setZoom(zoom - 0.25));
-  document.getElementById('zoom-level').addEventListener('click', () => setZoom(1)); // click số % để về 100%
 
   // Dòng gợi ý trên canvas: tool + class đang chọn
   function updateHint() {
-    const cls = findClass(selectedClassId);
+    const cls = findClass(currentClassId);
     const classText = cls
       ? `Class: <span class="class-dot" style="background:${cls.color}"></span><b>${esc(cls.name)}</b>`
       : 'No classes yet';
@@ -1188,70 +1204,33 @@ async function initLabelPage() {
     refreshIcons();
   }
 
-  // Chọn 1 annotation: highlight box trên ảnh + dòng trong danh sách
-  function selectBox(index) {
-    document.querySelectorAll('.bbox').forEach(box => {
-      box.classList.toggle('selected', Number(box.dataset.index) === index);
-    });
-    document.querySelectorAll('.annotation-item').forEach(item => {
-      item.classList.toggle('active', Number(item.dataset.index) === index);
-    });
+  function updateToolbarState() {
+    document.getElementById('unsaved').hidden = !dirty;
+    document.getElementById('btn-undo').disabled = !annotator.canUndo();
+    document.getElementById('btn-redo').disabled = !annotator.canRedo();
   }
 
-  // Hiển thị ảnh thứ "index" trong mảng IMAGES
-  function showImage(index) {
-    // Đi quá đầu/cuối thì vòng lại
-    if (index < 0) index = IMAGES.length - 1;
-    if (index >= IMAGES.length) index = 0;
-    currentIndex = index;
-    const img = IMAGES[index];
+  // Cập nhật mọi chỗ đang hiện trạng thái của ảnh (huy hiệu, ô chọn, chấm ở thumbnail)
+  function syncStatus(img, status) {
+    img.status = status;
+    const index = IMAGES.indexOf(img);
+    if (strip.querySelectorAll('.thumb-dot')[index]) strip.querySelectorAll('.thumb-dot')[index].className = `thumb-dot dot-${status}`;
+    if (IMAGES[currentIndex] !== img) return;
+    const badge = document.getElementById('image-status');
+    badge.className = `status-badge status-${status}`;
+    badge.textContent = STATUS_TEXT[status];
+    const select = document.getElementById('status-select');
+    if (select) select.value = status;
+  }
 
-    // Ảnh + tiêu đề
-    stageRatio = img.ratio || 4 / 3;
-    fitStage();
-    document.getElementById('canvas-image').src = img.fileUrl;
+  // Phần đầu trang và bảng thông tin của ảnh đang mở
+  function renderImageHeader(img) {
     document.getElementById('image-title').textContent = img.name;
-    document.getElementById('image-counter').textContent = `${windowOffset + index + 1} / ${formatNumber(windowTotal)}`;
-    const statusEl = document.getElementById('image-status');
-    statusEl.className = `status-badge status-${img.status}`;
-    statusEl.textContent = STATUS_TEXT[img.status];
+    document.getElementById('image-counter').textContent = `${windowOffset + currentIndex + 1} / ${formatNumber(windowTotal)}`;
+    const badge = document.getElementById('image-status');
+    badge.className = `status-badge status-${img.status}`;
+    badge.textContent = STATUS_TEXT[img.status];
 
-    // Vẽ bounding box giả bằng div (vị trí theo %)
-    document.getElementById('box-layer').innerHTML = img.boxes.map((box, i) => {
-      const cls = findClass(box.classId);
-      return `
-        <div class="bbox" data-index="${i}"
-             style="left:${box.x}%; top:${box.y}%; width:${box.w}%; height:${box.h}%; color:${cls.color}; background:${cls.color}1f;">
-          <span class="bbox-label" style="background:${cls.color}">${esc(cls.name)}</span>
-        </div>`;
-    }).join('');
-
-    // Danh sách annotation bên phải
-    const list = document.getElementById('annotation-list');
-    document.getElementById('annotation-count').textContent = img.boxes.length;
-    if (img.boxes.length === 0) {
-      list.innerHTML = '<p class="empty-text">No annotations yet. Pick the <b>Bounding box</b> tool (B) to start.</p>';
-    } else {
-      list.innerHTML = img.boxes.map((box, i) => {
-        const cls = findClass(box.classId);
-        return `
-          <button class="annotation-item" data-index="${i}">
-            <span class="class-dot" style="background:${cls.color}"></span>
-            <div class="annotation-item-main">
-              <p>${esc(cls.name)}</p>
-              <p class="text-small text-muted">x ${box.x}% · y ${box.y}% · ${box.w}×${box.h}%</p>
-            </div>
-            <span class="annotation-id">#${i + 1}</span>
-          </button>`;
-      }).join('');
-    }
-
-    // Click vào box hoặc dòng annotation → chọn annotation đó
-    document.querySelectorAll('.bbox, .annotation-item').forEach(el => {
-      el.addEventListener('click', () => selectBox(Number(el.dataset.index)));
-    });
-
-    // Thông tin ảnh
     // Có backend: trạng thái là ô chọn để đổi được; dữ liệu mẫu: chỉ là nhãn hiển thị
     const statusCell = API_MODE
       ? `<select class="select select-sm" id="status-select">${Object.keys(STATUS_TEXT).map(key =>
@@ -1271,8 +1250,8 @@ async function initLabelPage() {
 
     // Highlight thumbnail đang xem và cuộn dải thumbnail tới đó
     const thumbs = strip.querySelectorAll('.thumb');
-    thumbs.forEach((thumb, i) => thumb.classList.toggle('active', i === index));
-    const active = thumbs[index];
+    thumbs.forEach((thumb, i) => thumb.classList.toggle('active', i === currentIndex));
+    const active = thumbs[currentIndex];
     strip.scrollTo({ left: active.offsetLeft - strip.clientWidth / 2 + active.offsetWidth / 2, behavior: 'smooth' });
 
     // Cập nhật URL (?image=...) để F5 vẫn ở đúng ảnh
@@ -1280,15 +1259,214 @@ async function initLabelPage() {
     refreshIcons();
   }
 
-  // ----- Phím tắt -----
+  // ----- 6. Khung ảnh -----
+  // Khung ảnh luôn có ĐÚNG tỉ lệ của ảnh và to nhất có thể trong vùng canvas
+  let stageRatio = 4 / 3;
+  function fitStage() {
+    const maxWidth = area.clientWidth - 64;
+    const maxHeight = area.clientHeight - 96;
+    const width = Math.min(maxWidth, maxHeight * stageRatio);
+    stage.style.width = width + 'px';
+    stage.style.height = (width / stageRatio) + 'px';
+    annotator.resize();
+  }
+  window.addEventListener('resize', fitStage);
+
+  // ----- 7. Mở ảnh, lưu, chuyển ảnh -----
+  async function openImage(index) {
+    currentIndex = index;
+    const img = IMAGES[index];
+    const token = ++openToken;
+
+    stageRatio = img.ratio || 4 / 3;
+    fitStage();
+    annotator.resetView();
+    document.getElementById('canvas-image').src = img.fileUrl;
+    renderImageHeader(img);
+
+    annotator.load([]);          // xoá hình của ảnh trước trong lúc chờ tải
+    version = 0;
+    dirty = false;
+    loadFailed = false;
+    renderAnnotationList();
+    updateToolbarState();
+
+    try {
+      const data = await annotationStore.load(img);
+      if (token !== openToken) return;   // trong lúc chờ, người dùng đã chuyển sang ảnh khác
+      version = data.version;
+      annotator.load(data.annotations);
+      if (data.status && data.status !== img.status) syncStatus(img, data.status);
+    } catch (error) {
+      if (token !== openToken) return;
+      loadFailed = true;
+      showToast(`Could not load the annotations: ${error.message}`, 'error');
+    }
+    renderAnnotationList();
+    updateToolbarState();
+  }
+
+  // Lưu annotation của ảnh đang mở. Trả về true nếu đã lưu xong (hoặc không có gì để lưu).
+  async function save({ silent = false } = {}) {
+    if (!dirty) {
+      if (!silent) showToast('Nothing to save', 'info');
+      return true;
+    }
+    if (loadFailed) {
+      showToast('This image\'s annotations did not load, so saving is disabled. Reload the page.', 'error');
+      return false;
+    }
+    if (saving) return false;
+    saving = true;
+    const img = IMAGES[currentIndex];
+    const editsAtStart = editCount;
+    try {
+      const result = await annotationStore.save(img, version, annotator.toPayload());
+      version = result.version;
+      if (editCount === editsAtStart) dirty = false;   // nếu trong lúc lưu lại có sửa thêm thì vẫn còn "chưa lưu"
+      if (result.status && result.status !== img.status) syncStatus(img, result.status);
+      if (!silent) showToast(API_MODE ? 'Saved' : 'Saved (demo: kept in memory only)');
+      return true;
+    } catch (error) {
+      if (error.status === 409) {
+        await resolveConflict();
+      } else {
+        showToast(error.message, 'error');
+      }
+      return false;
+    } finally {
+      saving = false;
+      updateToolbarState();
+    }
+  }
+
+  // Người khác đã lưu ảnh này trong lúc bạn sửa
+  async function resolveConflict() {
+    const discard = window.confirm(
+      'Someone else changed this image while you were editing it.\n\n' +
+      'OK: discard your changes and load their version.\n' +
+      'Cancel: keep your drawing on screen (you will not be able to save it).');
+    if (discard) await openImage(currentIndex);
+  }
+
+  // Chuyển ảnh. Có thay đổi chưa lưu thì lưu trước; lưu không được thì ở lại để không mất công
+  async function showImage(index) {
+    if (index < 0) index = IMAGES.length - 1;   // đi quá đầu/cuối thì vòng lại
+    if (index >= IMAGES.length) index = 0;
+    if (index === currentIndex || navigating) return;
+    navigating = true;
+    try {
+      if (dirty && !(await save({ silent: true }))) return;
+      await openImage(index);
+    } finally {
+      navigating = false;
+    }
+  }
+
+  // Đổi trạng thái của ảnh đang xem và lưu vào database
+  async function changeStatus(status) {
+    const img = IMAGES[currentIndex];
+    if (img.status === status) return;
+    try {
+      await apiSend('PATCH', `/api/images/${img.id}`, { status });
+    } catch (error) {
+      showToast(error.message, 'error');
+      syncStatus(img, img.status);   // đưa ô chọn trạng thái về giá trị cũ
+      return;
+    }
+    syncStatus(img, status);
+    showToast(`Marked as ${STATUS_TEXT[status].toLowerCase()}`);
+  }
+
+  // ----- 8. Gắn các nút -----
+  // Thanh công cụ bên trái
+  function setTool(name) {
+    currentTool = name;
+    annotator.setTool(name);
+    updateHint();
+  }
+  makeSelectable(document.querySelectorAll('.tool-btn'), btn => setTool(btn.dataset.tool));
+
+  // Chọn class: dùng cho hình sắp vẽ, và đổi class của hình đang chọn (nếu có)
+  function chooseClass(id) {
+    if (!findClass(id)) return;
+    currentClassId = id;
+    annotator.setCurrentClass(id);
+    if (annotator.getSelected() !== null) annotator.setClassOf(annotator.getSelected(), id);
+    renderClassPicker();
+    updateHint();
+  }
+  classPicker.addEventListener('click', event => {
+    const btn = event.target.closest('[data-class-id]');
+    if (btn) chooseClass(Number(btn.dataset.classId));
+  });
+
+  // Danh sách annotation bên phải: bấm để chọn, rê chuột để làm nổi hình trên ảnh, nút thùng rác để xoá
+  let hoveredUid = null;
+  list.addEventListener('click', event => {
+    const del = event.target.closest('[data-delete-uid]');
+    if (del) return annotator.deleteAnnotation(Number(del.dataset.deleteUid));
+    const row = event.target.closest('[data-uid]');
+    if (row) annotator.select(Number(row.dataset.uid));
+  });
+  list.addEventListener('mouseover', event => {
+    const row = event.target.closest('[data-uid]');
+    const uid = row ? Number(row.dataset.uid) : null;
+    if (uid !== hoveredUid) { hoveredUid = uid; annotator.setHover(uid); }
+  });
+  list.addEventListener('mouseleave', () => { hoveredUid = null; annotator.setHover(null); });
+
+  // Dải thumbnail và các nút phía trên / dưới
+  strip.innerHTML = IMAGES.map((img, i) => `
+    <button class="thumb" data-index="${i}" title="${esc(img.name)}">
+      <img src="${img.thumbUrl}" alt="${esc(img.name)}" loading="lazy">
+      <span class="thumb-dot dot-${img.status}"></span>
+    </button>`).join('');
+  strip.querySelectorAll('.thumb').forEach(thumb => {
+    thumb.addEventListener('click', () => showImage(Number(thumb.dataset.index)));
+  });
+  document.getElementById('btn-prev').addEventListener('click', () => showImage(currentIndex - 1));
+  document.getElementById('btn-next').addEventListener('click', () => showImage(currentIndex + 1));
+  document.getElementById('btn-save').addEventListener('click', () => save());
+  document.getElementById('btn-undo').addEventListener('click', () => annotator.undo());
+  document.getElementById('btn-redo').addEventListener('click', () => annotator.redo());
+
+  // "Submit for review": có backend thì lưu hình rồi đổi trạng thái ảnh thành review
+  document.getElementById('btn-submit-review').addEventListener('click', async () => {
+    if (!API_MODE) return showToast('Image sent for review (demo only)');
+    if (dirty && !(await save({ silent: true }))) return;
+    changeStatus('review');
+  });
+
+  // Zoom
+  document.getElementById('btn-zoom-in').addEventListener('click', () => annotator.zoomBy(1.25));
+  document.getElementById('btn-zoom-out').addEventListener('click', () => annotator.zoomBy(1 / 1.25));
+  document.getElementById('zoom-level').addEventListener('click', () => annotator.resetView()); // click số % để về 100%
+
+  // Đóng tab khi còn thay đổi chưa lưu thì trình duyệt sẽ hỏi lại
+  window.addEventListener('beforeunload', event => {
+    if (dirty) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+  });
+
+  // ----- 9. Phím tắt -----
   document.addEventListener('keydown', event => {
-    // Đang gõ trong ô nhập liệu thì bỏ qua
+    // Đang gõ trong ô nhập liệu, hoặc đang mở hộp thoại thì bỏ qua
     if (event.target.matches('input, textarea, select')) return;
+    if (document.querySelector('.modal-overlay.open')) return;
+
+    // Các phím liên quan tới hình vẽ (xoá, undo, Esc, Space...) do annotator xử lý
+    if (annotator.handleKey(event)) {
+      event.preventDefault();
+      return;
+    }
 
     // Ctrl+S / Cmd+S → Save
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
       event.preventDefault();
-      saveAction();
+      save();
       return;
     }
     if (event.ctrlKey || event.metaKey || event.altKey) return;
@@ -1304,15 +1482,18 @@ async function initLabelPage() {
       showImage(currentIndex + 1);
     } else if (event.key === '?') {
       openModal('modal-shortcuts');
-    } else if (event.key >= '1' && event.key <= '9') {
-      const btn = classButtons[Number(event.key) - 1];
-      if (btn) btn.click();
+    } else if (event.key >= '1' && event.key <= '9' && CLASSES[Number(event.key) - 1]) {
+      chooseClass(CLASSES[Number(event.key) - 1].id);
     }
   });
+  document.addEventListener('keyup', event => annotator.handleKeyUp(event));
+  window.addEventListener('blur', () => annotator.releasePanOverride());   // đổi cửa sổ khi đang giữ Space
 
-  // Hiển thị lần đầu
+  // ----- 10. Hiển thị lần đầu -----
+  renderClassPicker();
   updateHint();
-  showImage(currentIndex);
+  updateToolbarState();
+  await openImage(currentIndex);
 }
 
 

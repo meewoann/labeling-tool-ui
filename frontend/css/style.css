@@ -931,49 +931,47 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
   background-size: 16px 16px;
 }
 
-/* Khung ảnh tỉ lệ 4:3, bounding box đặt bên trong theo % */
+/* Khung ảnh: width + height do JS đặt đúng tỉ lệ ảnh (hàm fitStage trong app.js).
+   Zoom và kéo ảnh là CSS transform; gốc ở góc trên trái để tính toạ độ chuột cho dễ. */
 .canvas-stage {
   position: relative;
-  /* width + height do JS đặt theo tỉ lệ ảnh (hàm fitStage trong app.js).
-     Giá trị dưới đây chỉ dùng trong tích tắc trước khi JS chạy. */
-  height: calc(100% - 96px);
+  height: calc(100% - 96px);   /* chỉ dùng trong tích tắc trước khi JS chạy */
   aspect-ratio: 4 / 3;
-  border-radius: 8px;
-  overflow: hidden;
   background: #E5E7EB;
   box-shadow: var(--shadow-lg);
-  transition: transform 0.2s;
+  transform-origin: 0 0;
 }
 .canvas-stage img {
+  display: block;
   width: 100%;
   height: 100%;
   object-fit: cover;
+  border-radius: 8px;
   user-select: none;
   -webkit-user-drag: none;
 }
-.box-layer { position: absolute; inset: 0; }
 
-/* Bounding box giả: div có viền màu (màu đặt bằng style="color:...") */
-.bbox {
+/* Lớp SVG phủ lên ảnh, annotator.js vẽ hộp / đa giác vào đây */
+.annotation-svg {
   position: absolute;
-  border: 2px solid currentColor;
-  border-radius: 2px;
-  cursor: pointer;
-  transition: box-shadow 0.15s;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;           /* núm kéo ở mép ảnh không bị cắt */
+  touch-action: none;
+  user-select: none;
 }
-.bbox-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  padding: 1px 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #fff;
-  border-bottom-right-radius: 4px;
-  white-space: nowrap;
-}
-/* Box đang chọn: làm tối phần còn lại của ảnh */
-.bbox.selected { box-shadow: 0 0 0 2px #fff, 0 0 0 9999px rgba(0, 0, 0, 0.35); z-index: 2; }
+.annotation-svg text { font-family: var(--font); font-weight: 600; }
+
+/* Con trỏ chuột theo công cụ đang chọn */
+.canvas-area.tool-select { cursor: default; }
+.canvas-area.tool-bbox,
+.canvas-area.tool-polygon { cursor: crosshair; }
+.canvas-area.tool-pan,
+.canvas-area.pan-ready { cursor: grab; }
+.canvas-area.tool-zoom { cursor: zoom-in; }
+.canvas-area.panning { cursor: grabbing; }
+.canvas-area.pan-ready .annotation-svg * { cursor: grab !important; }
 
 /* Các nhãn nổi trên canvas */
 .canvas-hint {
@@ -1359,3 +1357,30 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 /* ----- Settings: tên người dùng, danh sách thành viên ----- */
 .profile-name { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
 .list-row-actions { display: flex; gap: 6px; }
+
+/* ----- Trang Annotate: vẽ annotation ----- */
+.tool-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+.tool-btn:disabled:hover { background: none; color: var(--text-muted); }
+
+/* Chấm báo "chưa lưu" cạnh tên ảnh */
+.unsaved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #B45309;
+}
+.unsaved::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--warning); }
+
+.panel-title .link { text-transform: none; letter-spacing: 0; font-size: 12px; }
+
+/* 1 dòng annotation: bấm để chọn, có nút xoá hiện khi rê chuột */
+.annotation-item { cursor: pointer; }
+.annotation-item.hover-highlight,
+.annotation-item:hover { background: var(--surface-muted); }
+.annotation-item.active { background: var(--primary-lighter); border-color: var(--primary-light); }
+.annotation-delete { opacity: 0; width: 28px; height: 28px; }
+.annotation-item:hover .annotation-delete,
+.annotation-item.active .annotation-delete { opacity: 1; }
+.annotation-delete:hover { color: var(--danger); }
