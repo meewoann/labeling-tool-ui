@@ -23,10 +23,15 @@ var SOFTWARE_RENDERER = /swiftshader|llvmpipe|softpipe|lavapipe|software|basic r
    3. Làm gọn tên card
    ---------------------------------------------------------- */
 
-// Firefox cố ý báo tên card CHUNG CHUNG để chống theo dõi, vd "NVIDIA GeForce GTX 980, or similar"
-// (dù máy thật là RTX 3060). Tên kiểu này không phải card của người dùng nên không được hiện như thật.
+// Các trình duyệt chống theo dõi cố ý báo tên card CHUNG CHUNG, không phải card thật của người dùng:
+//   Firefox: "NVIDIA GeForce GTX 980, or similar" (dù máy thật là RTX 3060)
+//   Brave:   "Brave"            (Brave Shields)
+//   Safari:  "Apple GPU"
+// Tên kiểu này không được hiện như thật.
+var GENERIC_RENDERER = /^(brave|apple gpu)$/i;
+function isFirefoxMasked(raw) { return /, or similar$/i.test(String(raw || '').trim()); }
 function isMaskedRenderer(raw) {
-  return /, or similar$/i.test(String(raw || '').trim());
+  return isFirefoxMasked(raw) || GENERIC_RENDERER.test(String(raw || '').trim());
 }
 
 // Trình duyệt hay trả về dạng dài "ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)".
@@ -117,7 +122,8 @@ function gpuDisplayName(info) {
     var vendor = VENDOR_NAMES[String(webgpu.vendor).toLowerCase()] || webgpu.vendor;
     return vendor && webgpu.architecture ? vendor + ' (' + webgpu.architecture + ')' : (vendor || webgpu.architecture);
   }
-  if (masked) return webglName.split(' ')[0] + MASKED_SUFFIX;   // chỉ chắc chắn về hãng (chữ đầu của tên)
+  if (masked && isFirefoxMasked(rawName)) return webglName.split(' ')[0] + MASKED_SUFFIX;   // chỉ chắc chắn về hãng (chữ đầu của tên)
+  if (masked) return 'Hidden by your browser';                                                // Brave, Safari: tên chẳng nói gì
   if (webglName) return webglName;
   if (webgl && webgl.hidden) return 'Hidden by your browser';
   return 'Not detected';
@@ -126,12 +132,16 @@ function gpuDisplayName(info) {
 // Câu giải thích hiện dưới dòng GPU khi tên card không đáng tin (rỗng nếu không cần)
 function gpuNameNote(info) {
   var name = gpuDisplayName(info);
-  if (name.slice(-MASKED_SUFFIX.length) === MASKED_SUFFIX) {
-    return 'Your browser reports a generic GPU name on purpose, as a privacy protection, so the exact model cannot be shown. ' +
-           'Chrome and Edge show it. In Firefox this is the webgl.sanitize-unmasked-renderer setting in about:config.';
+  var raw = info && info.webgl && info.webgl.renderer ? String(info.webgl.renderer).trim() : '';
+  var general = 'Your browser hides the exact GPU model from websites on purpose, as a privacy protection. ';
+  if (name.slice(-MASKED_SUFFIX.length) === MASKED_SUFFIX) {        // Firefox
+    return general + 'Chrome and Edge show it by default. In Firefox this is the webgl.sanitize-unmasked-renderer setting in about:config.';
+  }
+  if (/^brave$/i.test(raw)) {
+    return general + 'In Brave this comes from Shields: lowering the fingerprinting protection for this site should reveal it. Chrome and Edge show it by default.';
   }
   if (name === 'Hidden by your browser') {
-    return 'Your browser does not tell websites which GPU you have.';
+    return general + 'Chrome and Edge show it by default.';
   }
   return '';
 }
