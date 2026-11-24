@@ -3,7 +3,7 @@
 # LabelKit
 
 **A self-hosted image annotation tool for computer vision datasets.**<br>
-Upload folders of images, track what is labeled, keep everything in one SQLite file.
+Upload folders of images, draw boxes and polygons, and keep everything in one SQLite file.
 
 ![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.12-3776AB?logo=python&logoColor=white)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)
@@ -15,6 +15,7 @@ Upload folders of images, track what is labeled, keep everything in one SQLite f
 </div>
 
 > **Status:** early prototype. Datasets, classes, box and polygon annotation and sign-in work today. Exporting to YOLO / COCO is next (see the [roadmap](#roadmap)).
+> A few parts of the interface are still placeholders: the Export page, the notification bell, the Import button, the storage meter and the Members tab.
 
 ## Features
 
@@ -25,7 +26,7 @@ Upload folders of images, track what is labeled, keep everything in one SQLite f
 - **Per-image status.** `unlabeled`, `labeled` or `review` (the first annotation marks an image as labeled), with filters, progress bars and thumbnails.
 - **Accounts.** Username and password, admins manage the team. Passwords are hashed with scrypt, failed logins are rate limited, sessions use HttpOnly cookies.
 - **Nothing to install but Python.** One process and one SQLite file. No Node, no build step; the UI is plain HTML, CSS and JavaScript. A Docker setup is included if you prefer it.
-- **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data).
+- **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data). Shapes can be drawn there but are only kept in memory.
 
 ## Screenshots
 
@@ -106,6 +107,34 @@ python3 backend/cli.py import "Outdoor Scenes" /data/photos
 python3 backend/cli.py stats "Outdoor Scenes"
 python3 backend/cli.py user passwd alex      # reset a password, even if you are locked out
 ```
+
+## How it works
+
+```
+Browser ──► FastAPI (backend/app.py) ──► SQLite file
+ plain JS        │                        projects, classes, images, annotations, users
+                 └──────────────────────► image files on disk (uploaded, or imported in place)
+```
+
+The browser only talks to the JSON API under `/api`. Every `/api` route requires a signed-in user except sign-in itself and the health check.
+
+<details>
+<summary>API overview</summary>
+
+| Method and path | Who | What |
+| --- | --- | --- |
+| `GET /api/health` | anyone | is the backend running |
+| `GET /api/auth/status` · `POST /api/auth/setup` · `POST /api/auth/login` · `POST /api/auth/logout` | anyone | first-run setup, sign in and out |
+| `GET /api/auth/me` · `POST /api/auth/password` | signed in | who am I, change my password |
+| `GET/POST /api/users` · `POST /api/users/{id}/password` · `DELETE /api/users/{id}` | admin | manage the team |
+| `GET/POST /api/projects` · `GET /api/projects/{id}` | signed in | projects |
+| `GET/POST /api/projects/{id}/classes` · `PATCH/DELETE /api/classes/{id}` | signed in | classes |
+| `POST /api/projects/{id}/upload` · `/upload/finish` · `/import` | signed in | bring images in |
+| `GET /api/projects/{id}/images` · `PATCH /api/images/{id}` | signed in | list images, change status |
+| `GET /api/images/{id}/file` · `/thumb` | signed in | the image and its thumbnail |
+| `GET/PUT /api/images/{id}/annotations` | signed in | read and save boxes and polygons (`PUT` needs the version you read; `409` if someone saved first) |
+
+</details>
 
 ## Project layout
 
