@@ -87,8 +87,12 @@
             <p class="text-small text-muted"><span id="label-project-name"></span> · <span id="image-counter"></span></p>
           </div>
           <span class="status-badge" id="image-status"></span>
+          <span class="unsaved" id="unsaved" hidden>Unsaved changes</span>
         </div>
         <div class="ws-actions">
+          <button class="icon-btn" id="btn-undo" title="Undo (Ctrl+Z)" disabled><i data-lucide="undo-2"></i></button>
+          <button class="icon-btn" id="btn-redo" title="Redo (Ctrl+Shift+Z)" disabled><i data-lucide="redo-2"></i></button>
+          <span class="divider-v"></span>
           <button class="btn btn-ghost btn-sm" data-open-modal="modal-shortcuts">
             <i data-lucide="keyboard"></i>Shortcuts
           </button>
@@ -109,7 +113,7 @@
           <button class="tool-btn" data-tool="bbox" data-tooltip="Bounding box (B)">
             <i data-lucide="square-dashed"></i>
           </button>
-          <button class="tool-btn" data-tool="polygon" data-tooltip="Polygon (P)">
+          <button class="tool-btn" data-tool="polygon" data-tooltip="Polygon (coming soon)" disabled>
             <i data-lucide="pentagon"></i>
           </button>
           <div class="tool-divider"></div>
@@ -121,14 +125,14 @@
           </button>
         </div>
 
-        <!-- Giữa: canvas hiển thị ảnh + bounding box giả -->
+        <!-- Giữa: canvas hiển thị ảnh, annotation.js vẽ các hình lên lớp SVG -->
         <div class="canvas-area">
           <div class="canvas-hint" id="canvas-hint"></div>
 
           <div class="canvas-stage" id="canvas-stage">
             <img id="canvas-image" alt="Image being labeled">
-            <!-- JS vẽ các div .bbox vào đây -->
-            <div class="box-layer" id="box-layer"></div>
+            <!-- annotator.js vẽ các hình (hộp, đa giác) và núm kéo vào đây -->
+            <svg class="annotation-svg" id="annotation-svg" xmlns="http://www.w3.org/2000/svg"></svg>
           </div>
 
           <div class="zoom-control">
@@ -141,7 +145,9 @@
         <!-- Phải: chọn class, danh sách annotation, thông tin ảnh -->
         <aside class="ws-panel">
           <section class="panel-section">
-            <div class="panel-title">Classes</div>
+            <div class="panel-title">
+              Classes <a href="project.html" class="link" id="link-manage-classes">Manage</a>
+            </div>
             <div class="class-picker" id="class-picker"></div>
           </section>
 
@@ -189,9 +195,22 @@
         <div class="shortcut-row"><span>Zoom</span><span><kbd>Z</kbd></span></div>
       </div>
       <div class="shortcut-group">
+        <h3>Drawing</h3>
+        <div class="shortcut-row"><span>Draw a box</span><span>drag with <kbd>B</kbd></span></div>
+        <div class="shortcut-row"><span>Move or resize a shape</span><span>drag with <kbd>V</kbd></span></div>
+        <div class="shortcut-row"><span>Choose class (or change the selected shape's class)</span><span><kbd>1</kbd>–<kbd>9</kbd></span></div>
+        <div class="shortcut-row"><span>Delete the selected shape</span><span><kbd>Del</kbd></span></div>
+        <div class="shortcut-row"><span>Deselect or cancel drawing</span><span><kbd>Esc</kbd></span></div>
+        <div class="shortcut-row"><span>Undo / redo</span><span><kbd>Ctrl</kbd><kbd>Z</kbd> <kbd>Ctrl</kbd><kbd>Shift</kbd><kbd>Z</kbd></span></div>
+      </div>
+      <div class="shortcut-group">
+        <h3>View</h3>
+        <div class="shortcut-row"><span>Zoom at the pointer</span><span>mouse wheel</span></div>
+        <div class="shortcut-row"><span>Move the image</span><span>hold <kbd>Space</kbd> and drag</span></div>
+      </div>
+      <div class="shortcut-group">
         <h3>Navigation &amp; actions</h3>
-        <div class="shortcut-row"><span>Previous / next image</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
-        <div class="shortcut-row"><span>Select class</span><span><kbd>1</kbd>–<kbd>9</kbd></span></div>
+        <div class="shortcut-row"><span>Previous / next image (saves first)</span><span><kbd>←</kbd><kbd>→</kbd></span></div>
         <div class="shortcut-row"><span>Save</span><span><kbd>Ctrl</kbd><kbd>S</kbd></span></div>
         <div class="shortcut-row"><span>Show shortcuts</span><span><kbd>?</kbd></span></div>
         <div class="shortcut-row"><span>Close dialog</span><span><kbd>Esc</kbd></span></div>
@@ -204,6 +223,7 @@
 </div>
 
 <script src="https://unpkg.com/lucide@latest"></script>
+<script src="js/annotator.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>
