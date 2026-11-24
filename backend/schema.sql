@@ -37,6 +37,8 @@ CREATE TABLE IF NOT EXISTS images (
   -- Trạng thái: chưa gán nhãn / đã gán nhãn / đang chờ review
   status      TEXT NOT NULL DEFAULT 'unlabeled'
               CHECK (status IN ('unlabeled', 'labeled', 'review')),
+  -- Tăng 1 mỗi lần annotation của ảnh thay đổi. Dùng để phát hiện 2 người cùng sửa 1 ảnh.
+  annotation_version INTEGER NOT NULL DEFAULT 0,
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (folder_id, rel_path)        -- không bao giờ có 2 dòng cho cùng 1 file
@@ -82,3 +84,24 @@ CREATE TABLE IF NOT EXISTS classes (
   created_at  TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE (project_id, name)
 );
+
+-- ==========================================================
+-- Annotation: các hình vẽ trên ảnh (hộp bbox, đa giác polygon)
+--   data là JSON, toạ độ CHUẨN HOÁ 0..1 theo kích thước ảnh (0,0 = góc trên trái, 1,1 = góc dưới phải)
+--   nên đúng với mọi độ phân giải và mọi mức zoom:
+--     bbox    : {"x": 0.1, "y": 0.2, "w": 0.3, "h": 0.4}
+--     polygon : {"points": [[0.1, 0.2], [0.5, 0.2], [0.3, 0.6]]}
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS annotations (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  image_id    INTEGER NOT NULL REFERENCES images(id)  ON DELETE CASCADE,
+  class_id    INTEGER NOT NULL REFERENCES classes(id) ON DELETE CASCADE,
+  type        TEXT NOT NULL CHECK (type IN ('bbox', 'polygon')),
+  data        TEXT NOT NULL,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_annotations_image ON annotations (image_id);
+CREATE INDEX IF NOT EXISTS idx_annotations_class ON annotations (class_id);

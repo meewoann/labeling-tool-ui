@@ -20,7 +20,8 @@ Mục lục:
   5. Class (nhãn)
   6. Import / upload folder ảnh
   7. Ảnh: danh sách, trạng thái, file, thumbnail
-  8. Phục vụ trang web & chạy server
+  8. Annotation (box, polygon)
+  9. Phục vụ trang web & chạy server
 """
 
 import os
@@ -124,6 +125,7 @@ def image_json(row):
         "size_bytes": row["size_bytes"],
         "status": row["status"],
         "updated_at": row["updated_at"],
+        "annotation_count": row["annotation_count"],
         "thumb_url": f"/api/images/{row['id']}/thumb",
         "file_url": f"/api/images/{row['id']}/file",
     }
@@ -383,11 +385,12 @@ def update_class(class_id: int, body: ClassPatch, conn=Depends(get_conn)):
 
 @app.delete("/api/classes/{class_id}")
 def delete_class(class_id: int, conn=Depends(get_conn)):
+    """Xoá class kéo theo mọi annotation dùng class đó (trả về số annotation đã xoá)."""
     try:
-        db.delete_class(conn, class_id)
+        removed = db.delete_class(conn, class_id)
     except LookupError as error:
         raise HTTPException(404, str(error))
-    return {"ok": True}
+    return {"ok": True, "deleted_annotations": removed}
 
 
 # ==========================================================
@@ -542,7 +545,43 @@ def image_thumb(image_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 8. PHỤC VỤ TRANG WEB & CHẠY SERVER
+# 8. ANNOTATION (BOX, POLYGON)
+# ==========================================================
+
+class AnnotationIn(BaseModel):
+    class_id: int
+    type: str
+    data: dict
+
+
+class AnnotationsIn(BaseModel):
+    base_version: int          # phiên bản trình duyệt đã đọc, để phát hiện 2 người cùng sửa
+    annotations: List[AnnotationIn]
+
+
+@app.get("/api/images/{image_id}/annotations")
+def get_image_annotations(image_id: int, conn=Depends(get_conn)):
+    try:
+        return db.get_annotations(conn, image_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+
+
+@app.put("/api/images/{image_id}/annotations")
+def put_image_annotations(image_id: int, body: AnnotationsIn, conn=Depends(get_conn)):
+    """Lưu toàn bộ annotation của ảnh (thay thế danh sách cũ). 409 nếu có người khác đã lưu trước."""
+    try:
+        return db.save_annotations(conn, image_id, body.base_version, [a.dict() for a in body.annotations])
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    except db.VersionConflict as error:
+        raise HTTPException(409, str(error))
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
+# ==========================================================
+# 9. PHỤC VỤ TRANG WEB & CHẠY SERVER
 # ==========================================================
 
 @app.middleware("http")
