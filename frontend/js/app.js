@@ -1151,6 +1151,7 @@ async function initLabelPage() {
     onSelect: () => renderAnnotationList(),
     onViewChange: zoom => { document.getElementById('zoom-level').textContent = Math.round(zoom * 100) + '%'; },
     onNeedClass: () => showToast('Add a class first: open the project page and use the Classes tab', 'info'),
+    onMessage: text => showToast(text, 'info'),
   });
   annotator.setCurrentClass(currentClassId);
 
@@ -1170,7 +1171,7 @@ async function initLabelPage() {
     const img = IMAGES[currentIndex];
     document.getElementById('annotation-count').textContent = items.length;
     if (items.length === 0) {
-      list.innerHTML = '<p class="empty-text">No annotations yet. Pick the <b>Bounding box</b> tool (B) and drag on the image.</p>';
+      list.innerHTML = '<p class="empty-text">No annotations yet. Use <b>Bounding box</b> (B) and drag, or <b>Polygon</b> (P) and click the outline.</p>';
       return;
     }
     list.innerHTML = items.map((a, i) => {
