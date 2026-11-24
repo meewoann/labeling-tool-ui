@@ -783,6 +783,12 @@ async function initProjectPage() {
   let editingClass = null;          // class đang sửa (null = đang thêm mới)
   let deleteArmed = false;          // đã bấm "Delete" 1 lần, chờ bấm lần 2 để xác nhận
 
+  // Số annotation của 1 class: từ database (annotation_count) hoặc từ dữ liệu mẫu (count)
+  function classStat(c) {
+    const n = c.annotation_count !== undefined ? c.annotation_count : c.count;
+    return n === undefined ? '' : `<span class="list-row-stat">${formatNumber(n)} ${n === 1 ? 'annotation' : 'annotations'}</span>`;
+  }
+
   // Vẽ danh sách class. Thứ tự trong danh sách cũng là phím tắt 1, 2, 3... ở trang Annotate
   function renderClasses() {
     classList.innerHTML = CLASSES.length ? CLASSES.map((c, i) => `
@@ -792,7 +798,7 @@ async function initProjectPage() {
           <p class="list-row-title">${esc(c.name)}</p>
           <p class="text-small text-muted">${i < 9 ? `Shortcut key <kbd>${i + 1}</kbd>` : 'No shortcut'}</p>
         </div>
-        ${c.count !== undefined ? `<span class="list-row-stat">${formatNumber(c.count)} annotations</span>` : ''}
+        ${classStat(c)}
         <code class="color-code">${c.color}</code>
         <button class="btn btn-ghost btn-sm" data-edit-class="${c.id}"><i data-lucide="pencil"></i>Edit</button>
       </div>`).join('')

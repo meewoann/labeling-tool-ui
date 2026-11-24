@@ -10,32 +10,35 @@ Upload folders of images, track what is labeled, keep everything in one SQLite f
 ![SQLite](https://img.shields.io/badge/SQLite-003B57?logo=sqlite&logoColor=white)
 ![Status](https://img.shields.io/badge/status-early%20prototype-F59E0B)
 
-<img src="docs/screenshots/projects.jpg" alt="LabelKit projects page" width="860">
+<img src="docs/screenshots/annotate.jpg" alt="Annotating with a polygon and bounding boxes in LabelKit" width="860">
 
 </div>
 
-> **Status:** early prototype. Dataset management and sign-in work today. Drawing annotations and exporting are next (see the [roadmap](#roadmap)).
+> **Status:** early prototype. Datasets, classes, box and polygon annotation and sign-in work today. Exporting to YOLO / COCO is next (see the [roadmap](#roadmap)).
 
 ## Features
 
 - **Two ways to bring images in.** Upload a whole folder from the browser (sub-folders are kept), or import a folder that already sits on the server without copying it.
-- **Per-image status.** `unlabeled`, `labeled` or `review`, with filters, progress bars and thumbnails.
+- **Boxes and polygons.** Draw bounding boxes and segmentation polygons, move and resize them, drag polygon points (double-click an edge to add one). Zoom with the wheel, pan with Space, undo and redo.
+- **Classes per project.** Name, color and number-key shortcuts (1–9). Choosing a class while a shape is selected changes that shape's class.
+- **Safe saving.** Coordinates are stored normalized (0–1), so they stay correct at any resolution. Changing image saves first, and if two people edit the same image the second save is refused instead of silently overwriting the first.
+- **Per-image status.** `unlabeled`, `labeled` or `review` (the first annotation marks an image as labeled), with filters, progress bars and thumbnails.
 - **Accounts.** Username and password, admins manage the team. Passwords are hashed with scrypt, failed logins are rate limited, sessions use HttpOnly cookies.
-- **Nothing to install but Python.** One process and one SQLite file. No Docker, no Node, no build step; the UI is plain HTML, CSS and JavaScript.
+- **Nothing to install but Python.** One process and one SQLite file. No Node, no build step; the UI is plain HTML, CSS and JavaScript. A Docker setup is included if you prefer it.
 - **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data).
 
 ## Screenshots
 
 <table>
   <tr>
-    <td width="33%"><a href="docs/screenshots/project.jpg"><img src="docs/screenshots/project.jpg" alt="Project page"></a></td>
-    <td width="33%"><a href="docs/screenshots/annotate.jpg"><img src="docs/screenshots/annotate.jpg" alt="Annotate page"></a></td>
-    <td width="33%"><a href="docs/screenshots/team.jpg"><img src="docs/screenshots/team.jpg" alt="Team settings"></a></td>
+    <td width="33%"><a href="docs/screenshots/projects.jpg"><img src="docs/screenshots/projects.jpg" alt="Projects page"></a></td>
+    <td width="33%"><a href="docs/screenshots/project.jpg"><img src="docs/screenshots/project.jpg" alt="Project page with images and status filters"></a></td>
+    <td width="33%"><a href="docs/screenshots/classes.jpg"><img src="docs/screenshots/classes.jpg" alt="Classes tab"></a></td>
   </tr>
   <tr>
-    <td align="center"><sub>Project: images and status filters</sub></td>
-    <td align="center"><sub>Annotate: image viewer</sub></td>
-    <td align="center"><sub>Settings: team management</sub></td>
+    <td align="center"><sub>Projects</sub></td>
+    <td align="center"><sub>Images and status filters</sub></td>
+    <td align="center"><sub>Classes with annotation counts</sub></td>
   </tr>
 </table>
 
@@ -65,6 +68,23 @@ Then open <http://localhost:8000>. The database, uploaded images and thumbnails 
 - **Back up:** `docker run --rm -v labelkit-data:/data -v "$PWD":/backup alpine tar czf /backup/labelkit-data.tgz -C /data .`
 - The container runs as a non-root user (uid 10001). If you replace the volume with a host folder, make it writable for that user: `sudo chown 10001 ./data`.
 - GitHub Actions builds the image and smoke-tests it on every push to `main` and every pull request.
+
+## Annotating
+
+Open an image from a project (or use **Annotate** in the sidebar). Add classes first in the project's **Classes** tab.
+
+| | |
+| --- | --- |
+| `B` then drag | draw a bounding box |
+| `P` then click | draw a polygon; finish with a click on the first point, a double-click or `Enter`; `Backspace` removes the last point |
+| `V` | select: drag a shape to move it, drag a handle to resize, double-click a polygon edge or point to add or delete a point |
+| `1`–`9` | choose a class (or change the class of the selected shape) |
+| `Delete` · `Esc` | delete the selected shape · deselect or cancel drawing |
+| `Ctrl+Z` · `Ctrl+Shift+Z` | undo · redo |
+| mouse wheel · `Space`+drag | zoom at the pointer · move the image |
+| `←` `→` · `Ctrl+S` | previous / next image (saves first) · save |
+
+Press `?` on the page for the full list.
 
 ## Configuration
 
@@ -99,7 +119,8 @@ backend/
 frontend/                plain HTML, CSS and JavaScript, no build step
   index.html … 404.html  one file per page
   css/style.css          all styles (colors are variables at the top)
-  js/app.js              all front-end code
+  js/app.js              pages, API calls
+  js/annotator.js        the drawing engine (SVG): boxes, polygons, zoom, undo
   serve.py               tiny static server for the UI-only prototype
 docs/                    screenshots and the Vietnamese README
 .github/workflows/       CI: tests and a Docker build check
@@ -116,8 +137,9 @@ Run the tests with `cd backend && python3 -m unittest -v`.
 
 ## Roadmap
 
-- [ ] Classes and bounding box / polygon annotation
+- [x] Classes, bounding boxes and polygons
 - [ ] Export to YOLO, COCO and Pascal VOC
+- [ ] Model-assisted pre-labeling
 - [ ] Per-project permissions
 - [ ] S3 / MinIO image storage
 - [ ] HTTPS and email sign-in
