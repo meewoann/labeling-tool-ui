@@ -1412,3 +1412,4 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.device-note { margin-top: 10px; }
