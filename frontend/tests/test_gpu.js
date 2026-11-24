@@ -92,4 +92,16 @@ test('ghi chú: có khi tên bị che, rỗng khi tên thật', () => {
   assert.ok(gpuNameNote({ webgl: { version: 1, renderer: null, hidden: true }, webgpu: null }).length > 0);
 });
 
+// ---- Brave, Safari ----
+test('Brave và Safari báo tên chung chung', () => {
+  assert.ok(isMaskedRenderer('Brave') && isMaskedRenderer('apple gpu') && isMaskedRenderer('Apple GPU'));
+  assert.ok(!isMaskedRenderer('Apple M2') && !isMaskedRenderer('Brave Software Renderer X'));
+});
+test('Brave: không hiện chữ "Brave" như tên card', () => assert.strictEqual(gpuDisplayName(masked('Brave')), 'Hidden by your browser'));
+test('Brave: ghi chú nhắc tới Shields', () => assert.ok(/Shields/.test(gpuNameNote(masked('Brave')))));
+test('Brave vẫn là GPU thật qua WebGL', () => assert.strictEqual(classifyGpu(masked('Brave')).level, 'webgl'));
+test('Brave + WebGPU thật → lấy tên từ WebGPU', () => assert.strictEqual(gpuDisplayName(masked('Brave', { webgpu: gpuOk })), 'NVIDIA GeForce RTX 3060'));
+test('Safari "Apple GPU" → tên bị ẩn', () => assert.strictEqual(gpuDisplayName(masked('Apple GPU')), 'Hidden by your browser'));
+test('ghi chú Firefox vẫn nhắc cài đặt about:config', () => assert.ok(/about:config/.test(gpuNameNote(masked('NVIDIA GeForce GTX 980, or similar')))));
+
 console.log(`\n${passed} tests passed` + (process.exitCode ? ' (có test hỏng)' : ''));

@@ -171,6 +171,13 @@ Dockerfile, docker-compose.yml
 
 Run the tests with `cd backend && python3 -m unittest -v`, and `node frontend/tests/test_gpu.js` for the front-end logic.
 
+## Known limitations
+
+- **GPU detection depends on the browser.** Privacy-focused browsers hide the real GPU on purpose: Firefox reports a generic card (`NVIDIA GeForce GTX 980, or similar`), Brave reports `Brave` (Shields) and Safari reports `Apple GPU`. The **This device** card then says the exact model is hidden instead of guessing. Chrome and Edge show it by default; in Firefox and Brave you can relax the protection for this site. WebGPU is not available in every browser and operating system yet, in which case the card reports WebGL only.
+- Polygons are checked for size and shape (at least 3 points and a real area) but not for crossing their own edges.
+- The Annotate page loads at most 200 images around the one you open, so Prev / Next stays inside that window. Open an image from the project page to jump elsewhere.
+- Annotations are saved with **Save**, `Ctrl+S` or when you change image, not continuously.
+
 ## Security notes
 
 - There is no built-in HTTPS, so passwords travel unencrypted over plain HTTP. Put it behind HTTPS or a VPN before exposing it beyond a trusted network.

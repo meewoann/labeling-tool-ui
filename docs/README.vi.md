@@ -168,6 +168,13 @@ Các trang: `index.html` (đăng nhập), `projects.html`, `project.html` (ảnh
   - `data-toast="Nội dung"`: bấm để hiện thông báo nhỏ
   - `data-nav="projects"` trên link sidebar: để tô sáng mục đang ở
 
+## Hạn chế đã biết
+
+- **Phát hiện GPU phụ thuộc trình duyệt.** Các trình duyệt chú trọng riêng tư cố ý giấu card thật: Firefox báo một card chung chung (`NVIDIA GeForce GTX 980, or similar`), Brave báo `Brave` (do Shields), Safari báo `Apple GPU`. Khi đó thẻ **This device** sẽ nói rõ model bị giấu thay vì đoán. Chrome và Edge hiện tên đầy đủ theo mặc định; ở Firefox và Brave bạn có thể nới bảo vệ cho trang này. WebGPU chưa có ở mọi trình duyệt và hệ điều hành, khi đó thẻ chỉ báo WebGL.
+- Polygon được kiểm tra kích thước và hình dạng (ít nhất 3 điểm và có diện tích thật) nhưng chưa kiểm tra việc tự cắt cạnh của chính nó.
+- Trang Annotate chỉ tải tối đa 200 ảnh quanh ảnh bạn mở, nên nút Prev / Next chỉ đi trong cửa sổ đó. Muốn nhảy tới chỗ khác thì mở ảnh từ trang project.
+- Annotation được lưu bằng **Save**, `Ctrl+S` hoặc khi chuyển ảnh, không lưu liên tục.
+
 ## Lưu ý bảo mật
 
 - Chưa có HTTPS, nên mật khẩu đi qua mạng **không mã hoá** khi dùng HTTP. Hãy đặt sau HTTPS hoặc VPN trước khi mở ra ngoài mạng tin cậy.
