@@ -1604,11 +1604,50 @@ function initSettingsPage() {
   document.getElementById('profile-role').textContent = isAdmin ? 'Admin' : 'Member';
   document.getElementById('s-username').value = username;
 
+  initDeviceCard();   // chạy nền, không chặn phần còn lại của trang
+
   // Đổi mật khẩu và quản lý người dùng cần backend
   if (!API_MODE) return;
   document.getElementById('account-settings').hidden = false;
   initPasswordForm();
   if (CURRENT_USER.is_admin) return initUserAdmin();
+}
+
+// Hiện GPU của máy đang mở web. Phát hiện trong trình duyệt (gpu.js), không gửi gì lên server.
+async function initDeviceCard() {
+  const box = document.getElementById('device-info');
+  if (!box || typeof detectGpu !== 'function') return;
+
+  let info;
+  try {
+    info = await detectGpu();
+  } catch (e) {
+    box.innerHTML = '<p class="text-muted">Could not check this device.</p>';
+    return;
+  }
+
+  // Mọi chuỗi lấy từ trình duyệt đều qua esc() trước khi đưa vào HTML
+  const webgpu = info.webgpu;
+  const webgpuText = webgpu.supported
+    ? 'Yes' + (webgpu.fallback ? ' (software fallback)' : '') + (webgpu.architecture ? ` · ${webgpu.architecture}` : '')
+    : `No${webgpu.reason ? ` · ${webgpu.reason}` : ''}`;
+  const webglText = info.webgl ? `WebGL ${info.webgl.version}` : 'No';
+  const memoryText = info.memoryGb ? `${info.memoryGb} GB${info.memoryGb >= 8 ? ' or more' : ''}` : 'Unknown';
+  const rows = [
+    ['GPU', info.name],
+    ['WebGPU', webgpuText],
+    ['WebGL', webglText],
+    ['CPU threads', info.threads || 'Unknown'],
+    ['Memory', memoryText],
+  ];
+
+  box.innerHTML = `
+    <div class="device-verdict">
+      <span class="verdict verdict-${info.verdict.level}">${esc(info.verdict.title)}</span>
+      <p class="text-small text-muted">${esc(info.verdict.detail)}</p>
+    </div>
+    ${rows.map(([label, value]) => `
+      <div class="info-row"><span>${label}</span><span class="device-value">${esc(value)}</span></div>`).join('')}`;
 }
 
 // Đổi mật khẩu của chính mình

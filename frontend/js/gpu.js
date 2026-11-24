@@ -34,6 +34,7 @@ function cleanRenderer(raw) {
     text = parts.length > 1 ? parts[1] : parts[0];   // [hãng, tên card, backend]
   }
   return text
+    .replace(/^Vulkan [\d.]+ \((.*)\)$/, '$1')                   // "Vulkan 1.3.0 (Tên card)" → "Tên card"
     .replace(/\s*\(0x[0-9a-f]+\)/gi, '')                       // mã thiết bị
     .replace(/\s+Direct3D\w*/gi, '')
     .replace(/\s+(vs|ps)_\d_\d/gi, '')

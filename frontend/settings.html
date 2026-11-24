@@ -179,6 +179,15 @@
           </div>
         </section>
 
+        <!-- Máy đang dùng: GPU được phát hiện ngay trong trình duyệt (js/gpu.js), không gửi gì lên server -->
+        <section class="card settings-section" id="section-device">
+          <div>
+            <h2>This device</h2>
+            <p class="text-muted">What your browser can use to run AI models. This is detected in your browser; nothing is sent to the server.</p>
+          </div>
+          <div id="device-info"><p class="text-muted">Checking…</p></div>
+        </section>
+
         <div class="settings-actions">
           <button type="reset" class="btn btn-secondary">Reset</button>
           <button type="submit" class="btn btn-primary"><i data-lucide="check"></i>Save changes</button>
@@ -292,6 +301,7 @@
 </div>
 
 <script src="https://unpkg.com/lucide@latest"></script>
+<script src="js/gpu.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

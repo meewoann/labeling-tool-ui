@@ -17,6 +17,10 @@ test('ANGLE + Intel với mã thiết bị', () => assert.strictEqual(
   cleanRenderer('ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'Intel(R) UHD Graphics 630'));
 test('ANGLE + OpenGL (Linux)', () => assert.strictEqual(
   cleanRenderer('ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL 4.5.0)'), 'NVIDIA GeForce GTX 1650/PCIe/SSE2'));
+test('ANGLE + Vulkan (SwiftShader)', () => assert.strictEqual(
+  cleanRenderer('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'SwiftShader Device (Subzero)'));
+test('ANGLE + Vulkan (AMD)', () => assert.strictEqual(
+  cleanRenderer('ANGLE (AMD, Vulkan 1.3.255 (AMD Radeon RX 6700 XT (RADV NAVI22)), radv)'), 'AMD Radeon RX 6700 XT (RADV NAVI22)'));
 test('Apple giữ nguyên', () => assert.strictEqual(cleanRenderer('Apple M2 Pro'), 'Apple M2 Pro'));
 test('Mesa giữ nguyên', () => assert.strictEqual(cleanRenderer('Mesa Intel(R) Xe Graphics (TGL GT2)'), 'Mesa Intel(R) Xe Graphics (TGL GT2)'));
 test('rỗng / null', () => { assert.strictEqual(cleanRenderer(''), ''); assert.strictEqual(cleanRenderer(null), ''); assert.strictEqual(cleanRenderer(undefined), ''); });

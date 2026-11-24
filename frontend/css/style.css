@@ -1384,3 +1384,19 @@ input[type="range"] { width: 100%; accent-color: var(--primary); cursor: pointer
 .annotation-item:hover .annotation-delete,
 .annotation-item.active .annotation-delete { opacity: 1; }
 .annotation-delete:hover { color: var(--danger); }
+
+/* ----- Settings: mục "This device" (GPU) ----- */
+.device-verdict { margin-bottom: 12px; }
+.device-verdict p { margin-top: 8px; }
+.verdict {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.verdict-webgpu { background: var(--primary-lighter); color: var(--primary-dark); }
+.verdict-webgl { background: #DBEAFE; color: #1D4ED8; }
+.verdict-software { background: #FEF3C7; color: #B45309; }
+.verdict-none { background: #F3F4F6; color: #4B5563; }
+.device-value { text-align: right; max-width: 70%; overflow-wrap: anywhere; }
