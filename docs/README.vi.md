@@ -114,10 +114,20 @@ python3 backend/cli.py user passwd alex      # đặt lại mật khẩu, kể c
 
 ## Cách hoạt động và cấu trúc thư mục
 
-```
-Trình duyệt ──► FastAPI (backend/app.py) ──► file SQLite
-  JS thuần           │                        projects, classes, images, annotations, users
-                     └──────────────────────► file ảnh trên ổ đĩa (upload, hoặc import tại chỗ)
+```mermaid
+flowchart LR
+    B["Trình duyệt<br/>HTML, CSS, JavaScript thuần"]
+    A["FastAPI<br/>backend/app.py"]
+    D[("File SQLite<br/>projects, classes, images,<br/>annotations, users")]
+    F[["File ảnh trên ổ đĩa<br/>upload, hoặc import tại chỗ"]]
+    B -- "JSON API (/api)" --> A
+    A --> D
+    A --> F
+
+    classDef app fill:#ECFDF5,stroke:#10B981,stroke-width:2px,color:#065F46
+    classDef store fill:#F0F9FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A
+    class B,A app
+    class D,F store
 ```
 
 ```

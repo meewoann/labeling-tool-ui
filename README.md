@@ -110,10 +110,20 @@ python3 backend/cli.py user passwd alex      # reset a password, even if you are
 
 ## How it works
 
-```
-Browser ──► FastAPI (backend/app.py) ──► SQLite file
- plain JS        │                        projects, classes, images, annotations, users
-                 └──────────────────────► image files on disk (uploaded, or imported in place)
+```mermaid
+flowchart LR
+    B["Browser<br/>plain HTML, CSS and JavaScript"]
+    A["FastAPI<br/>backend/app.py"]
+    D[("SQLite file<br/>projects, classes, images,<br/>annotations, users")]
+    F[["Image files on disk<br/>uploaded, or imported in place"]]
+    B -- "JSON API (/api)" --> A
+    A --> D
+    A --> F
+
+    classDef app fill:#ECFDF5,stroke:#10B981,stroke-width:2px,color:#065F46
+    classDef store fill:#F0F9FF,stroke:#3B82F6,stroke-width:2px,color:#1E3A8A
+    class B,A app
+    class D,F store
 ```
 
 The browser only talks to the JSON API under `/api`. Every `/api` route requires a signed-in user except sign-in itself and the health check.
