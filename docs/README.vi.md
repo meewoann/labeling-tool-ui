@@ -17,7 +17,7 @@ Chỉ dùng HTML + CSS + JavaScript thuần: không framework, không npm, khôn
 | `frontend/index.html` | Trang vào: tự chuyển sang `projects.html` (chưa có đăng nhập) |
 | `projects.html` | Thẻ thống kê và lưới project (số ảnh, % đã gán nhãn, lần cập nhật). Nút **New Project** mở modal |
 | `project.html` | Tổng quan 1 project: 4 thẻ thống kê và 3 tab **Images / Classes / Members**, có modal Upload và Add/Edit class |
-| `label.html` | Workspace gán nhãn: thanh công cụ, canvas có bounding box giả, panel class/annotation/thông tin ảnh, dải thumbnail Prev/Next, nút Save, modal phím tắt |
+| `label.html` | Workspace gán nhãn: vẽ bounding box và polygon, kéo/sửa/xoá, zoom, kéo ảnh, undo/redo, panel class/annotation/thông tin ảnh, dải thumbnail Prev/Next, Save, modal phím tắt |
 | `export.html` | Chọn định dạng (YOLO / COCO / Pascal VOC), slider chia train/val/test, nút Export |
 | `settings.html` | Form hồ sơ và tuỳ chọn (chỉ có giao diện) |
 | `404.html` | Trang lỗi, có link quay về projects |
@@ -63,8 +63,14 @@ Một số quy ước trong HTML mà `app.js` dựa vào:
 
 ## Phím tắt trên trang label
 
-`V` Select · `B` Bounding box · `P` Polygon · `H` Pan · `Z` Zoom · `←` `→` đổi ảnh ·
-`1`–`9` chọn class · `Ctrl+S` Save · `?` xem phím tắt · `/` nhảy vào ô search
+`V` Select · `B` Bounding box (kéo chuột) · `P` Polygon (bấm từng điểm; đóng bằng bấm lại điểm đầu, bấm đúp hoặc `Enter`;
+`Backspace` bỏ điểm vừa đặt) · `H` Pan · `Z` Zoom · `←` `→` đổi ảnh (tự lưu trước khi chuyển) ·
+`1`–`9` chọn class (đang chọn 1 hình thì đổi class của hình đó) · `Delete` xoá hình · `Esc` bỏ chọn / huỷ vẽ ·
+`Ctrl+Z` / `Ctrl+Shift+Z` undo / redo · con lăn chuột zoom · giữ `Space` + kéo để dời ảnh ·
+bấm đúp cạnh đa giác để thêm điểm, bấm đúp điểm để xoá điểm · `Ctrl+S` Save · `?` xem phím tắt · `/` nhảy vào ô search
+
+Phải tạo class trước (tab **Classes** của project). Tọa độ lưu dạng chuẩn hoá 0–1 nên đúng ở mọi độ phân giải. Hai người cùng sửa
+một ảnh: người lưu sau sẽ được hỏi, không ghi đè âm thầm lên công của người trước. Code vẽ nằm ở `frontend/js/annotator.js`.
 
 ## Database (backend/)
 
@@ -149,8 +155,7 @@ upload, mặc định `backend/data/uploads`), `LABELKIT_IMPORT_ROOT` (chỉ cho
 - Ô "import đường dẫn" cho phép người đã đăng nhập đăng ký bất kỳ folder ảnh nào trên máy chủ. Nên đặt `LABELKIT_IMPORT_ROOT`.
 - Mọi tài khoản hiện thấy mọi project (chưa có phân quyền theo project). Chưa có email, đăng ký tự do hay "quên mật khẩu" tự động (admin đặt lại giúp).
 
-**Chưa có:** class, annotation (box/polygon), phân quyền theo project, export thật. Trang gán nhãn hiện chỉ xem ảnh
-và đổi trạng thái; các thanh công cụ vẫn là giao diện mẫu.
+**Chưa có:** phân quyền theo project, export thật (YOLO/COCO/VOC), gán nhãn tự động bằng model.
 
 ## Chạy bằng Docker
 
