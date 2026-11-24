@@ -82,7 +82,7 @@ const USE_DEMO_DATA = false;
 // Các mảng mà toàn bộ code bên dưới sử dụng.
 // Dùng "let" vì ở chế độ có backend, dữ liệu thật sẽ được nạp vào thay thế (xem loadData).
 let PROJECTS = (USE_DEMO_DATA ? DEMO_PROJECTS : []).map(mockProject);
-const CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];   // chưa có trong database
+let CLASSES = USE_DEMO_DATA ? DEMO_CLASSES : [];      // ở chế độ có backend: class của project đang xem (nạp theo từng trang)
 let IMAGES = (USE_DEMO_DATA ? DEMO_IMAGES : []).map(mockImage);
 const MEMBERS = USE_DEMO_DATA ? DEMO_MEMBERS : [];   // chưa có trong database
 
@@ -183,7 +183,7 @@ function projectFromApi(p) {
     labeledImages: p.labeled,
     unlabeledImages: p.unlabeled,
     reviewImages: p.review,
-    classes: 0,
+    classes: p.class_count,
     members: 0,
     updatedAt: timeAgo(p.updated_at),
     coverUrl: p.cover_image_id ? `/api/images/${p.cover_image_id}/thumb` : null,
@@ -666,6 +666,8 @@ async function initProjectPage() {
     document.getElementById('tab-count-classes').textContent = CLASSES.length;
     document.getElementById('tab-count-images').textContent = formatNumber(project.totalImages);
   }
+  // Có backend: nạp class của project này (không thì dùng CLASSES mẫu)
+  if (API_MODE) CLASSES = await api(`/api/projects/${project.id}/classes`);
   renderHeader();
 
   // ----- Tab Images -----
@@ -757,17 +759,32 @@ async function initProjectPage() {
 
   // ----- Tab Classes -----
   const classList = document.getElementById('class-list');
-  classList.innerHTML = CLASSES.length ? CLASSES.map(c => `
-    <div class="list-row">
-      <span class="color-swatch" style="background:${c.color}"></span>
-      <div class="list-row-main">
-        <p class="list-row-title">${esc(c.name)}</p>
-        <p class="text-small text-muted">ID ${c.id}</p>
-      </div>
-      <span class="list-row-stat">${formatNumber(c.count)} annotations</span>
-      <code class="color-code">${c.color}</code>
-      <button class="btn btn-ghost btn-sm" data-edit-class="${c.id}"><i data-lucide="pencil"></i>Edit</button>
-    </div>`).join('') : emptyStateHTML('tag', 'No classes yet', 'Classes are not stored in the database yet.');
+  const classForm = document.getElementById('class-form');
+  const classError = document.getElementById('class-error');
+  const deleteClassBtn = document.getElementById('btn-delete-class');
+  let editingClass = null;          // class đang sửa (null = đang thêm mới)
+  let deleteArmed = false;          // đã bấm "Delete" 1 lần, chờ bấm lần 2 để xác nhận
+
+  // Vẽ danh sách class. Thứ tự trong danh sách cũng là phím tắt 1, 2, 3... ở trang Annotate
+  function renderClasses() {
+    classList.innerHTML = CLASSES.length ? CLASSES.map((c, i) => `
+      <div class="list-row">
+        <span class="color-swatch" style="background:${c.color}"></span>
+        <div class="list-row-main">
+          <p class="list-row-title">${esc(c.name)}</p>
+          <p class="text-small text-muted">${i < 9 ? `Shortcut key <kbd>${i + 1}</kbd>` : 'No shortcut'}</p>
+        </div>
+        ${c.count !== undefined ? `<span class="list-row-stat">${formatNumber(c.count)} annotations</span>` : ''}
+        <code class="color-code">${c.color}</code>
+        <button class="btn btn-ghost btn-sm" data-edit-class="${c.id}"><i data-lucide="pencil"></i>Edit</button>
+      </div>`).join('')
+      : emptyStateHTML('tag', 'No classes yet', 'Add the labels you want to draw, for example "car" or "person".',
+          '<button class="btn btn-primary" data-add-class><i data-lucide="plus"></i>Add class</button>');
+    project.classes = CLASSES.length;
+    renderHeader();
+    refreshIcons();
+  }
+  renderClasses();
 
   // Các ô màu trong modal class
   const colorBox = document.getElementById('color-options');
@@ -779,16 +796,77 @@ async function initProjectPage() {
 
   // Mở modal class: không truyền gì = Add, truyền class = Edit (điền sẵn dữ liệu)
   function openClassModal(cls) {
+    editingClass = cls || null;
+    deleteArmed = false;
+    classError.hidden = true;
     document.getElementById('class-modal-title').textContent = cls ? 'Edit class' : 'Add class';
     document.getElementById('class-name-input').value = cls ? cls.name : '';
-    const color = cls ? cls.color : COLOR_OPTIONS[0];
-    colorButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.color === color));
+    // Class mới: chọn sẵn màu đầu tiên chưa class nào dùng, để các class khác màu nhau
+    const used = CLASSES.map(c => c.color.toUpperCase());
+    const color = cls ? cls.color : (COLOR_OPTIONS.find(c => !used.includes(c)) || COLOR_OPTIONS[0]);
+    colorButtons.forEach(btn => btn.classList.toggle('active', btn.dataset.color.toUpperCase() === color.toUpperCase()));
+    deleteClassBtn.hidden = !(cls && API_MODE);
+    deleteClassBtn.querySelector('span').textContent = 'Delete class';
     openModal('modal-class');
+    document.getElementById('class-name-input').focus();
   }
 
+  // Bấm nút Add / Edit (gắn ở khung ngoài để nút được vẽ lại vẫn chạy)
   document.getElementById('btn-add-class').addEventListener('click', () => openClassModal());
-  classList.querySelectorAll('[data-edit-class]').forEach(btn => {
-    btn.addEventListener('click', () => openClassModal(findClass(Number(btn.dataset.editClass))));
+  classList.addEventListener('click', event => {
+    if (event.target.closest('[data-add-class]')) return openClassModal();
+    const btn = event.target.closest('[data-edit-class]');
+    if (btn) openClassModal(findClass(Number(btn.dataset.editClass)));
+  });
+
+  // Lưu (thêm mới hoặc sửa)
+  classForm.addEventListener('submit', async event => {
+    event.preventDefault();
+    classError.hidden = true;
+    const name = document.getElementById('class-name-input').value;
+    const active = colorBox.querySelector('.color-option.active');
+    const color = active ? active.dataset.color : COLOR_OPTIONS[0];
+
+    if (!API_MODE) {   // dữ liệu mẫu: không lưu gì
+      closeModal(document.getElementById('modal-class'));
+      showToast('Class saved (demo only)');
+      return;
+    }
+    try {
+      if (editingClass) {
+        await api(`/api/classes/${editingClass.id}`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, color }),
+        });
+      } else {
+        await apiPost(`/api/projects/${project.id}/classes`, { name, color });
+      }
+      CLASSES = await api(`/api/projects/${project.id}/classes`);
+      renderClasses();
+      closeModal(document.getElementById('modal-class'));
+      showToast(editingClass ? 'Class updated' : 'Class added');
+    } catch (e) {
+      classError.textContent = e.message;
+      classError.hidden = false;
+    }
+  });
+
+  // Xoá: bấm lần 1 đổi chữ nút để hỏi lại, bấm lần 2 mới xoá thật
+  deleteClassBtn.addEventListener('click', async () => {
+    if (!deleteArmed) {
+      deleteArmed = true;
+      deleteClassBtn.querySelector('span').textContent = 'Click again to delete';
+      return;
+    }
+    try {
+      await api(`/api/classes/${editingClass.id}`, { method: 'DELETE' });
+      CLASSES = await api(`/api/projects/${project.id}/classes`);
+      renderClasses();
+      closeModal(document.getElementById('modal-class'));
+      showToast('Class deleted');
+    } catch (e) {
+      classError.textContent = e.message;
+      classError.hidden = false;
+    }
   });
 
   // ----- Tab Members -----
