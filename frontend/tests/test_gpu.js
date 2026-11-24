@@ -16,7 +16,8 @@ test('ANGLE + Direct3D (Windows, NVIDIA)', () => assert.strictEqual(
 test('ANGLE + Intel với mã thiết bị', () => assert.strictEqual(
   cleanRenderer('ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E9B) Direct3D11 vs_5_0 ps_5_0, D3D11)'), 'Intel(R) UHD Graphics 630'));
 test('ANGLE + OpenGL (Linux)', () => assert.strictEqual(
-  cleanRenderer('ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL 4.5.0)'), 'NVIDIA GeForce GTX 1650/PCIe/SSE2'));
+  cleanRenderer('ANGLE (NVIDIA Corporation, NVIDIA GeForce GTX 1650/PCIe/SSE2, OpenGL 4.5.0)'), 'NVIDIA GeForce GTX 1650'));
+test('driver NVIDIA trên Linux (Firefox)', () => assert.strictEqual(cleanRenderer('NVIDIA GeForce RTX 3060/PCIe/SSE2'), 'NVIDIA GeForce RTX 3060'));
 test('ANGLE + Vulkan (SwiftShader)', () => assert.strictEqual(
   cleanRenderer('ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)'), 'SwiftShader Device (Subzero)'));
 test('ANGLE + Vulkan (AMD)', () => assert.strictEqual(
@@ -49,9 +50,20 @@ test('mọi kết luận đều có tiêu đề và mô tả', () => {
 });
 
 // ---- tên hiển thị ----
-test('tên: ưu tiên mô tả WebGPU', () => assert.strictEqual(gpuDisplayName({ webgl: gl('ANGLE (X, Y, Z)'), webgpu: gpuOk }), 'NVIDIA GeForce RTX 3060'));
-test('tên: ghép hãng + kiến trúc khi không có mô tả', () => assert.strictEqual(
-  gpuDisplayName({ webgl: null, webgpu: { supported: true, fallback: false, vendor: 'nvidia', architecture: 'ampere', description: '' } }), 'nvidia ampere'));
+test('tên: ưu tiên tên WebGL của card thật', () => assert.strictEqual(
+  gpuDisplayName({ webgl: gl('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)'), webgpu: gpuOk }), 'NVIDIA GeForce RTX 3060'));
+test('tên: trình duyệt thật (WebGPU chỉ có hãng + kiến trúc) vẫn ra đúng RTX 3060', () => assert.strictEqual(
+  gpuDisplayName({ webgl: gl('NVIDIA GeForce RTX 3060/PCIe/SSE2'), webgpu: { supported: true, fallback: false, vendor: 'nvidia', architecture: 'ampere', description: '' } }), 'NVIDIA GeForce RTX 3060'));
+test('tên: WebGPU có mô tả mà WebGL bị ẩn', () => assert.strictEqual(
+  gpuDisplayName({ webgl: { version: 2, renderer: null, hidden: true }, webgpu: gpuOk }), 'NVIDIA GeForce RTX 3060'));
+test('tên: WebGL là phần mềm thì dùng WebGPU thật', () => assert.strictEqual(
+  gpuDisplayName({ webgl: gl('llvmpipe (LLVM 15.0.7, 256 bits)'), webgpu: gpuOk }), 'NVIDIA GeForce RTX 3060'));
+test('tên: ghép hãng + kiến trúc khi không có WebGL lẫn mô tả', () => assert.strictEqual(
+  gpuDisplayName({ webgl: null, webgpu: { supported: true, fallback: false, vendor: 'nvidia', architecture: 'ampere', description: '' } }), 'NVIDIA (ampere)'));
+test('tên: hãng lạ giữ nguyên', () => assert.strictEqual(
+  gpuDisplayName({ webgl: null, webgpu: { supported: true, fallback: false, vendor: 'acme', architecture: '', description: '' } }), 'acme'));
+test('tên: WebGL phần mềm mà không có gì khác thì vẫn hiện tên đó', () => assert.strictEqual(
+  gpuDisplayName({ webgl: gl('llvmpipe (LLVM 15.0.7, 256 bits)'), webgpu: { supported: false } }), 'llvmpipe (LLVM 15.0.7, 256 bits)'));
 test('tên: lấy từ WebGL khi không có WebGPU', () => assert.strictEqual(
   gpuDisplayName({ webgl: gl('ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)'), webgpu: { supported: false } }), 'Intel(R) UHD Graphics 630'));
 test('tên: trình duyệt ẩn thông tin', () => assert.strictEqual(

@@ -1641,13 +1641,26 @@ async function initDeviceCard() {
     ['Memory', memoryText],
   ];
 
+  // Giá trị gốc trình duyệt trả về: để biết tên card được rút ra từ đâu, và gửi kèm khi cần báo lỗi
+  const rawLines = [
+    `WebGL vendor:    ${info.webgl ? (info.webgl.vendor || '(hidden)') : '(no WebGL)'}`,
+    `WebGL renderer:  ${info.webgl ? (info.webgl.renderer || '(hidden)') : '(no WebGL)'}`,
+    webgpu.supported
+      ? `WebGPU adapter: vendor=${webgpu.vendor || '-'} architecture=${webgpu.architecture || '-'} description=${webgpu.description || '-'} fallback=${webgpu.fallback}`
+      : `WebGPU adapter: ${webgpu.reason || 'not available'}`,
+  ];
+
   box.innerHTML = `
     <div class="device-verdict">
       <span class="verdict verdict-${info.verdict.level}">${esc(info.verdict.title)}</span>
       <p class="text-small text-muted">${esc(info.verdict.detail)}</p>
     </div>
     ${rows.map(([label, value]) => `
-      <div class="info-row"><span>${label}</span><span class="device-value">${esc(value)}</span></div>`).join('')}`;
+      <div class="info-row"><span>${label}</span><span class="device-value">${esc(value)}</span></div>`).join('')}
+    <details class="device-raw">
+      <summary>Raw values from the browser</summary>
+      <pre>${esc(rawLines.join('\n'))}</pre>
+    </details>`;
 }
 
 // Đổi mật khẩu của chính mình
