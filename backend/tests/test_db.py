@@ -129,6 +129,42 @@ class DbTestCase(unittest.TestCase):
         cover = db.list_projects(self.conn, self.project_id)[0]["cover_image_id"]
         self.assertEqual(cover, images[0]["id"])
 
+    def test_class_crud_and_validation(self):
+        car = db.create_class(self.conn, self.project_id, "  Car  ", "#3b82f6")
+        person = db.create_class(self.conn, self.project_id, "person", "#F59E0B")
+        classes = db.list_classes(self.conn, self.project_id)
+        self.assertEqual([(c["name"], c["color"]) for c in classes], [("Car", "#3B82F6"), ("person", "#F59E0B")])  # màu viết hoa, tên được dọn khoảng trắng
+        self.assertEqual(db.list_projects(self.conn, self.project_id)[0]["class_count"], 2)
+
+        for bad_name in ("", "   ", "x" * 51, "bell\x07"):
+            with self.assertRaises(ValueError, msg=repr(bad_name)):
+                db.create_class(self.conn, self.project_id, bad_name, "#000000")
+        for bad_color in ("red", "#12345", "#GGGGGG", "3B82F6", ""):
+            with self.assertRaises(ValueError, msg=bad_color):
+                db.create_class(self.conn, self.project_id, "ok-name", bad_color)
+        with self.assertRaises(ValueError):                                  # trùng tên, không phân biệt hoa thường
+            db.create_class(self.conn, self.project_id, "CAR", "#000000")
+
+        db.update_class(self.conn, car, name="Truck")
+        db.update_class(self.conn, car, color="#ef4444")
+        self.assertEqual((db.get_class(self.conn, car)["name"], db.get_class(self.conn, car)["color"]), ("Truck", "#EF4444"))
+        with self.assertRaises(ValueError):
+            db.update_class(self.conn, car, name="Person")                   # trùng với class khác
+        with self.assertRaises(LookupError):
+            db.update_class(self.conn, 99999, name="x")
+
+        # Hai project khác nhau có thể dùng cùng tên class
+        other = db.create_project(self.conn, "Other")
+        db.create_class(self.conn, other, "person", "#10B981")
+
+        db.delete_class(self.conn, person)
+        self.assertEqual([c["name"] for c in db.list_classes(self.conn, self.project_id)], ["Truck"])
+        with self.assertRaises(LookupError):
+            db.delete_class(self.conn, person)
+
+        db.delete_project(self.conn, other)                                  # xoá project thì class đi theo
+        self.assertEqual(self.conn.execute("SELECT COUNT(*) FROM classes").fetchone()[0], 1)
+
     def test_two_folders_and_delete_project(self):
         other = self.root / "other"
         make_image(other / "x.jpg")

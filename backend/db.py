@@ -7,11 +7,13 @@ phần còn lại của dự án không cần biết dữ liệu nằm ở đâu
 Mục lục:
   1. Cấu hình & kết nối
   2. Project
-  3. Import folder ảnh
-  4. Xem ảnh & đổi trạng thái
+  3. Class (nhãn)
+  4. Import folder ảnh
+  5. Xem ảnh & đổi trạng thái
 """
 
 import os
+import re
 import sqlite3
 from pathlib import Path
 
@@ -92,7 +94,8 @@ def list_projects(conn, project_id=None):
                COALESCE(SUM(i.status = 'unlabeled'), 0)     AS unlabeled,
                COALESCE(SUM(i.status = 'labeled'), 0)       AS labeled,
                COALESCE(SUM(i.status = 'review'), 0)        AS review,
-               MIN(i.id)                                    AS cover_image_id
+               MIN(i.id)                                    AS cover_image_id,
+               (SELECT COUNT(*) FROM classes c WHERE c.project_id = p.id) AS class_count
         FROM projects p
         LEFT JOIN images i ON i.project_id = p.id
         {where}
@@ -111,7 +114,81 @@ def delete_project(conn, project_id):
 
 
 # ==========================================================
-# 3. IMPORT FOLDER ẢNH
+# 3. CLASS (NHÃN)
+# ==========================================================
+
+CLASS_NAME_MAX = 50
+COLOR_PATTERN = re.compile(r"^#[0-9A-Fa-f]{6}$")
+
+
+def _clean_class_name(name):
+    name = " ".join(name.split())  # bỏ khoảng trắng thừa ở đầu/cuối/giữa
+    if not name:
+        raise ValueError("Tên class không được để trống")
+    if len(name) > CLASS_NAME_MAX:
+        raise ValueError(f"Tên class tối đa {CLASS_NAME_MAX} ký tự")
+    if not name.isprintable():
+        raise ValueError("Tên class chứa ký tự không hợp lệ")
+    return name
+
+
+def _clean_class_color(color):
+    if not COLOR_PATTERN.match(color):
+        raise ValueError("Màu phải có dạng #RRGGBB, ví dụ #10B981")
+    return color.upper()
+
+
+def create_class(conn, project_id, name, color):
+    """Tạo class cho project, trả về id."""
+    name, color = _clean_class_name(name), _clean_class_color(color)
+    try:
+        with conn:
+            cur = conn.execute(
+                "INSERT INTO classes (project_id, name, color) VALUES (?, ?, ?)", (project_id, name, color)
+            )
+    except sqlite3.IntegrityError:
+        raise ValueError(f"Class '{name}' đã tồn tại trong project này")
+    return cur.lastrowid
+
+
+def list_classes(conn, project_id):
+    """Các class của project theo thứ tự tạo (thứ tự này cũng là phím tắt 1, 2, 3...)."""
+    return conn.execute(
+        "SELECT id, project_id, name, color, created_at FROM classes WHERE project_id = ? ORDER BY id",
+        (project_id,),
+    ).fetchall()
+
+
+def get_class(conn, class_id):
+    row = conn.execute(
+        "SELECT id, project_id, name, color, created_at FROM classes WHERE id = ?", (class_id,)
+    ).fetchone()
+    if row is None:
+        raise LookupError("Không tìm thấy class")
+    return row
+
+
+def update_class(conn, class_id, name=None, color=None):
+    """Đổi tên và/hoặc màu (truyền None = giữ nguyên)."""
+    current = get_class(conn, class_id)
+    new_name = _clean_class_name(name) if name is not None else current["name"]
+    new_color = _clean_class_color(color) if color is not None else current["color"]
+    try:
+        with conn:
+            conn.execute("UPDATE classes SET name = ?, color = ? WHERE id = ?", (new_name, new_color, class_id))
+    except sqlite3.IntegrityError:
+        raise ValueError(f"Class '{new_name}' đã tồn tại trong project này")
+
+
+def delete_class(conn, class_id):
+    """Xoá class."""
+    get_class(conn, class_id)
+    with conn:
+        conn.execute("DELETE FROM classes WHERE id = ?", (class_id,))
+
+
+# ==========================================================
+# 4. IMPORT FOLDER ẢNH
 # ==========================================================
 
 def scan_images(folder):
@@ -197,7 +274,7 @@ def list_folders(conn, project_id):
 
 
 # ==========================================================
-# 4. XEM ẢNH & ĐỔI TRẠNG THÁI
+# 5. XEM ẢNH & ĐỔI TRẠNG THÁI
 # ==========================================================
 
 def list_images(conn, project_id, status=None, limit=50, offset=0):
