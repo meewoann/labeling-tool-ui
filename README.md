@@ -25,6 +25,7 @@ Upload folders of images, draw boxes and polygons, and keep everything in one SQ
 - **Safe saving.** Coordinates are stored normalized (0–1), so they stay correct at any resolution. Changing image saves first, and if two people edit the same image the second save is refused instead of silently overwriting the first.
 - **Per-image status.** `unlabeled`, `labeled` or `review` (the first annotation marks an image as labeled), with filters, progress bars and thumbnails.
 - **Accounts.** Username and password, admins manage the team. Passwords are hashed with scrypt, failed logins are rate limited, sessions use HttpOnly cookies.
+- **GPU check.** **Settings → This device** shows the GPU of the machine you are using and whether the browser can run AI models on it (WebGPU, WebGL or only software rendering). It is detected in the browser and nothing is sent to the server. It prepares the ground for model-assisted labeling.
 - **Nothing to install but Python.** One process and one SQLite file. No Node, no build step; the UI is plain HTML, CSS and JavaScript. A Docker setup is included if you prefer it.
 - **Try it without the backend.** Open `frontend/index.html` for a clickable UI prototype (set `USE_DEMO_DATA = true` in `frontend/js/app.js` to fill it with sample data). Shapes can be drawn there but are only kept in memory.
 
@@ -160,13 +161,15 @@ frontend/                plain HTML, CSS and JavaScript, no build step
   css/style.css          all styles (colors are variables at the top)
   js/app.js              pages, API calls
   js/annotator.js        the drawing engine (SVG): boxes, polygons, zoom, undo
+  js/gpu.js              GPU detection (WebGL / WebGPU)
+  tests/                 tests for the plain JavaScript logic (run with Node)
   serve.py               tiny static server for the UI-only prototype
 docs/                    screenshots and the Vietnamese README
-.github/workflows/       CI: tests and a Docker build check
+.github/workflows/       CI: backend tests, front-end tests and a Docker build check
 Dockerfile, docker-compose.yml
 ```
 
-Run the tests with `cd backend && python3 -m unittest -v`.
+Run the tests with `cd backend && python3 -m unittest -v`, and `node frontend/tests/test_gpu.js` for the front-end logic.
 
 ## Security notes
 

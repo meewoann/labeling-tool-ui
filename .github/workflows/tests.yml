@@ -25,6 +25,14 @@ jobs:
         working-directory: backend
         run: python -m unittest -v
 
+  # Plain JavaScript logic that does not need a browser (runs on the Node that GitHub already provides)
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: GPU detection logic
+        run: node frontend/tests/test_gpu.js
+
   # Builds the real image and checks it behaves: starts, serves the pages, hides
   # the code and database, runs as non-root, and keeps its data across a restart.
   docker:
