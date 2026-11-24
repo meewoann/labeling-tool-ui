@@ -16,13 +16,13 @@
      2. Chuyển đổi toạ độ, khung nhìn (zoom/pan)
      3. Vẽ ra SVG
      4. Thêm / sửa / xoá / undo
-     5. Thao tác chuột
+     5. Thao tác chuột (hộp, đa giác, chọn, kéo)
      6. Phím tắt
      7. Các hàm công khai
    ========================================================== */
 
 function createAnnotator(options) {
-  const { area, stage, svg, getClass, onChange, onSelect, onViewChange, onNeedClass } = options;
+  const { area, stage, svg, getClass, onChange, onSelect, onViewChange, onNeedClass, onMessage } = options;
 
 
   /* ========================================================
@@ -32,6 +32,8 @@ function createAnnotator(options) {
   const MIN_ZOOM = 0.25;
   const MAX_ZOOM = 32;
   const MIN_BOX = 0.004;       // hộp nhỏ hơn 0,4% cạnh ảnh coi như bấm nhầm, không tạo
+  const MIN_POLYGON_AREA = 1e-6;   // đa giác nhỏ hơn (hoặc các điểm thẳng hàng) bị từ chối
+  const CLOSE_RADIUS = 10;     // bấm cách điểm đầu tối đa 10px trên màn hình thì coi là "đóng đa giác"
   const MAX_UNDO = 100;
 
   let tool = 'select';
@@ -53,6 +55,18 @@ function createAnnotator(options) {
   const clone = value => JSON.parse(JSON.stringify(value));
   const snapshot = () => JSON.stringify(annotations);
   const findAnnotation = uid => annotations.find(a => a.uid === uid) || null;
+  const say = text => { if (onMessage) onMessage(text); };
+
+  // Diện tích đa giác (công thức Gauss), toạ độ chuẩn hoá. Điểm thẳng hàng thì ra ~0.
+  function polygonArea(points) {
+    let sum = 0;
+    for (let i = 0; i < points.length; i++) {
+      const [x1, y1] = points[i];
+      const [x2, y2] = points[(i + 1) % points.length];
+      sum += x1 * y2 - x2 * y1;
+    }
+    return Math.abs(sum) / 2;
+  }
 
   // Chặn ký tự đặc biệt trước khi nhét tên class vào SVG
   function escapeText(text) {
@@ -190,7 +204,20 @@ function createAnnotator(options) {
       return `<rect x="${draft.x * size.w}" y="${draft.y * size.h}" width="${draft.w * size.w}" height="${draft.h * size.h}"
         fill="${color}" fill-opacity="0.12" stroke="${color}" stroke-width="${2 * k}" stroke-dasharray="${6 * k} ${4 * k}" pointer-events="none"/>`;
     }
-    return '';
+
+    // Đa giác đang dở: các cạnh đã đặt (nét liền), cạnh nối tới con trỏ (nét đứt), các điểm
+    const px = p => `${p[0] * size.w},${p[1] * size.h}`;
+    const placed = draft.points.map(px).join(' ');
+    const rubber = draft.points.length && draft.cursor
+      ? `<polyline points="${px(draft.points[draft.points.length - 1])} ${px([draft.cursor.x, draft.cursor.y])} ${px(draft.points[0])}"
+          fill="none" stroke="${color}" stroke-width="${1.5 * k}" stroke-dasharray="${6 * k} ${4 * k}" opacity="0.8"/>`
+      : '';
+    const dots = draft.points.map((p, i) => {
+      const closable = i === 0 && draft.points.length >= 3;   // điểm đầu to hơn: bấm vào để đóng đa giác
+      return `<circle cx="${p[0] * size.w}" cy="${p[1] * size.h}" r="${(closable ? 7 : 4) * k}" fill="${closable ? '#fff' : color}" stroke="${color}" stroke-width="${2 * k}"/>`;
+    }).join('');
+    return `<g pointer-events="none">
+      <polyline points="${placed}" fill="none" stroke="${color}" stroke-width="${2 * k}" stroke-linejoin="round"/>${rubber}${dots}</g>`;
   }
 
   function render() {
@@ -302,12 +329,109 @@ function createAnnotator(options) {
     draft = { type: 'bbox', x: p.x, y: p.y, w: 0, h: 0 };
   }
 
+  // Đa giác: mỗi lần bấm thêm 1 điểm. Đóng bằng: bấm lại điểm đầu, bấm đúp, hoặc Enter.
+  function addPolygonPoint(event) {
+    if (currentClassId === null) {
+      if (onNeedClass) onNeedClass();
+      return;
+    }
+    const p = pointerToNorm(event);
+    if (!draft) draft = { type: 'polygon', points: [], cursor: p };
+
+    const near = (a, b, pixels) => Math.hypot((a[0] - b[0]) * size.w, (a[1] - b[1]) * size.h) * view.zoom <= pixels;
+    if (draft.points.length >= 3 && near([p.x, p.y], draft.points[0], CLOSE_RADIUS)) {
+      finishPolygon();
+      return;
+    }
+    const last = draft.points[draft.points.length - 1];
+    if (last && near([p.x, p.y], last, 2)) return;   // cú bấm thứ 2 của bấm đúp rơi trùng điểm vừa đặt
+    draft.points.push([p.x, p.y]);
+    render();
+  }
+
+  function finishPolygon() {
+    if (!draft || draft.type !== 'polygon') return;
+    const points = draft.points;
+    if (points.length < 3) {
+      say('A polygon needs at least 3 points');
+      return;
+    }
+    draft = null;
+    if (polygonArea(points) < MIN_POLYGON_AREA) {
+      say('That polygon is too small or flat. Try again.');
+      render();
+      return;
+    }
+    addAnnotation({ class_id: currentClassId, type: 'polygon', data: { points } });
+  }
+
+  // Tự nhận biết "bấm đúp" từ 2 lần nhấn chuột liên tiếp (gần nhau về thời gian và vị trí).
+  // Không dùng sự kiện dblclick của trình duyệt vì ta vẽ lại SVG ngay khi nhấn chuột, nên trình duyệt không ghép được thành 1 cú bấm.
+  let lastDown = { time: 0, x: 0, y: 0 };
+  function isDoubleClick(event) {
+    const quick = event.timeStamp - lastDown.time < 400;
+    const close = Math.hypot(event.clientX - lastDown.x, event.clientY - lastDown.y) < 6;
+    lastDown = quick && close ? { time: 0, x: 0, y: 0 } : { time: event.timeStamp, x: event.clientX, y: event.clientY };
+    return quick && close;
+  }
+
+  // Xử lý bấm đúp. Trả về true nếu đã dùng cú bấm đó.
+  //   công cụ Polygon: đóng đa giác
+  //   công cụ Select, đang chọn đa giác: bấm đúp vào đỉnh = xoá đỉnh, vào cạnh = thêm đỉnh tại đó
+  function handleDoubleClick(event) {
+    if (tool === 'polygon') {
+      if (!draft) return false;
+      finishPolygon();
+      return true;
+    }
+    const selected = findAnnotation(selectedUid);
+    const target = document.elementFromPoint(event.clientX, event.clientY) || event.target;   // phần tử nằm dưới con trỏ
+    if (tool !== 'select' || !selected || selected.type !== 'polygon' || !svg.contains(target)) return false;
+
+    const vertex = target.closest('[data-vertex]');
+    if (vertex) {
+      if (selected.data.points.length <= 3) {
+        say('A polygon needs at least 3 points');
+        return true;
+      }
+      pushUndo(snapshot());
+      selected.data.points.splice(Number(vertex.dataset.vertex), 1);
+      render();
+      changed('edit');
+      return true;
+    }
+    if (target.closest('[data-uid]')) {
+      // Tìm cạnh gần chỗ bấm nhất rồi chèn 1 đỉnh mới vào đúng điểm gần nhất trên cạnh đó
+      const p = pointerToNorm(event);
+      const pts = selected.data.points;
+      let best = { distance: Infinity, index: 0, point: null };
+      for (let i = 0; i < pts.length; i++) {
+        const a = pts[i], b = pts[(i + 1) % pts.length];
+        const abx = (b[0] - a[0]) * size.w, aby = (b[1] - a[1]) * size.h;
+        const apx = (p.x - a[0]) * size.w, apy = (p.y - a[1]) * size.h;
+        const t = clamp((apx * abx + apy * aby) / ((abx * abx + aby * aby) || 1), 0, 1);
+        const point = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        const distance = Math.hypot((p.x - point[0]) * size.w, (p.y - point[1]) * size.h);
+        if (distance < best.distance) best = { distance, index: i, point };
+      }
+      pushUndo(snapshot());
+      pts.splice(best.index + 1, 0, best.point);
+      render();
+      changed('edit');
+      return true;
+    }
+    return false;
+  }
+
   function startSelect(event) {
     const handle = event.target.closest('[data-handle]');
+    const vertex = event.target.closest('[data-vertex]');
     const shape = event.target.closest('[data-uid]');
     const selected = findAnnotation(selectedUid);
 
-    if (handle && selected && selected.type === 'bbox') {          // kéo núm để đổi kích thước hộp
+    if (vertex && selected && selected.type === 'polygon') {        // kéo 1 đỉnh của đa giác
+      gesture = { type: 'vertex', uid: selected.uid, index: Number(vertex.dataset.vertex), before: snapshot(), original: clone(selected.data) };
+    } else if (handle && selected && selected.type === 'bbox') {    // kéo núm để đổi kích thước hộp
       gesture = { type: 'resize', uid: selected.uid, handle: handle.dataset.handle, original: clone(selected.data), before: snapshot() };
     } else if (shape) {                                              // bấm vào hình: chọn rồi sẵn sàng kéo đi
       const uid = Number(shape.dataset.uid);
@@ -324,6 +448,10 @@ function createAnnotator(options) {
     if (event.button === 2) return;
 
     const onImage = svg.contains(event.target);
+    if (event.button === 0 && onImage && isDoubleClick(event) && handleDoubleClick(event)) {
+      event.preventDefault();
+      return;
+    }
     if (event.button === 1 || panOverride || tool === 'pan') {
       startPan(event);
     } else if (tool === 'zoom') {
@@ -333,6 +461,8 @@ function createAnnotator(options) {
       if (tool === 'select') startPan(event);
     } else if (tool === 'bbox') {
       startBox(event);
+    } else if (tool === 'polygon') {
+      addPolygonPoint(event);
     } else if (tool === 'select') {
       startSelect(event);
     }
@@ -373,7 +503,13 @@ function createAnnotator(options) {
   }
 
   function onPointerMove(event) {
-    if (!gesture) return;
+    if (!gesture) {
+      if (draft && draft.type === 'polygon') {     // đang vẽ đa giác: cạnh nét đứt chạy theo con trỏ
+        draft.cursor = pointerToNorm(event);
+        scheduleRender();
+      }
+      return;
+    }
     if (gesture.type === 'pan') {
       view.x = gesture.viewX + (event.clientX - gesture.startX);
       view.y = gesture.viewY + (event.clientY - gesture.startY);
@@ -389,6 +525,8 @@ function createAnnotator(options) {
       moveShape(gesture, q.x - gesture.start.x, q.y - gesture.start.y);
     } else if (gesture.type === 'resize') {
       resizeBox(gesture, p);
+    } else if (gesture.type === 'vertex') {
+      findAnnotation(gesture.uid).data.points[gesture.index] = [p.x, p.y];
     }
     render();
   }
@@ -408,7 +546,12 @@ function createAnnotator(options) {
       } else {
         render();
       }
-    } else if (finished.type === 'move' || finished.type === 'resize') {
+    } else if (finished.type === 'move' || finished.type === 'resize' || finished.type === 'vertex') {
+      const a = findAnnotation(finished.uid);
+      if (finished.type === 'vertex' && polygonArea(a.data.points) < MIN_POLYGON_AREA) {
+        a.data = finished.original;              // kéo đỉnh làm đa giác bẹp dí: trả về như cũ
+        say('That would flatten the polygon, so the point went back');
+      }
       if (snapshot() !== finished.before) {        // chỉ tính là 1 lần sửa nếu hình thật sự đổi
         pushUndo(finished.before);
         changed('edit');
@@ -463,6 +606,16 @@ function createAnnotator(options) {
       } else {
         select(null);
       }
+      return true;
+    }
+    if (key === 'Enter' && draft && draft.type === 'polygon') {
+      finishPolygon();
+      return true;
+    }
+    if (key === 'Backspace' && draft && draft.type === 'polygon') {   // bỏ điểm vừa đặt
+      draft.points.pop();
+      if (draft.points.length === 0) draft = null;
+      render();
       return true;
     }
     if ((key === 'Delete' || key === 'Backspace') && selectedUid !== null) {
