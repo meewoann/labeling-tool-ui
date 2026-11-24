@@ -69,3 +69,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
+
+-- ==========================================================
+-- Class (nhãn): mỗi project có danh sách class riêng, vd "car", "person"
+-- ==========================================================
+
+CREATE TABLE IF NOT EXISTS classes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  project_id  INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL COLLATE NOCASE,          -- "Car" và "car" là cùng 1 class
+  color       TEXT NOT NULL CHECK (color GLOB '#[0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f][0-9A-Fa-f]'),
+  created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (project_id, name)
+);

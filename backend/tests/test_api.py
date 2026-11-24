@@ -354,5 +354,39 @@ class UserManagementTests(ApiTestCase):
         self.assertNotIn("doomed", [u["username"] for u in admin.get("/api/users")[1]])
 
 
+class ClassApiTests(ApiTestCase):
+    def test_class_endpoints(self):
+        admin = self.make_admin_client("cls-admin")
+        pid = admin.post("/api/projects", {"name": "Classes demo"})[1]["id"]
+        base = f"/api/projects/{pid}/classes"
+
+        # Chưa đăng nhập thì không đụng được
+        for method, path, body in [("GET", base, None), ("POST", base, {"name": "x", "color": "#000000"}),
+                                   ("PATCH", "/api/classes/1", {"name": "y"}), ("DELETE", "/api/classes/1", None)]:
+            self.assertEqual(self.anon.request(method, path, body=body)[0], 401, f"{method} {path}")
+
+        self.assertEqual(admin.get(base)[1], [])
+        status, car, _ = admin.post(base, {"name": "Car", "color": "#3b82f6"})
+        self.assertEqual((status, car["name"], car["color"], car["project_id"]), (201, "Car", "#3B82F6", pid))
+        self.assertEqual(admin.post(base, {"name": "car", "color": "#000000"})[0], 409)          # trùng tên
+        self.assertEqual(admin.post(base, {"name": "", "color": "#000000"})[0], 400)
+        self.assertEqual(admin.post(base, {"name": "bad", "color": "red"})[0], 400)
+        self.assertEqual(admin.post("/api/projects/99999/classes", {"name": "x", "color": "#000000"})[0], 404)
+        self.assertEqual(admin.post(base, {"name": "x"})[0], 422)                                  # thiếu trường
+
+        admin.post(base, {"name": "Person", "color": "#F59E0B"})
+        self.assertEqual([c["name"] for c in admin.get(base)[1]], ["Car", "Person"])
+
+        status, updated, _ = admin.request("PATCH", f"/api/classes/{car['id']}", body={"name": "Truck", "color": "#ef4444"})
+        self.assertEqual((status, updated["name"], updated["color"]), (200, "Truck", "#EF4444"))
+        self.assertEqual(admin.request("PATCH", f"/api/classes/{car['id']}", body={"name": "person"})[0], 409)
+        self.assertEqual(admin.request("PATCH", "/api/classes/99999", body={"name": "z"})[0], 404)
+
+        self.assertEqual(admin.get("/api/projects")[1][0]["class_count"], 2)
+        self.assertEqual(admin.request("DELETE", f"/api/classes/{car['id']}")[0], 200)
+        self.assertEqual(admin.request("DELETE", f"/api/classes/{car['id']}")[0], 404)
+        self.assertEqual([c["name"] for c in admin.get(base)[1]], ["Person"])
+
+
 if __name__ == "__main__":
     unittest.main()

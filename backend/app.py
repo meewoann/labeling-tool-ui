@@ -17,9 +17,10 @@ Mục lục:
   2. Đăng nhập
   3. Tài khoản: đổi mật khẩu, quản lý người dùng
   4. Project
-  5. Import / upload folder ảnh
-  6. Ảnh: danh sách, trạng thái, file, thumbnail
-  7. Phục vụ trang web & chạy server
+  5. Class (nhãn)
+  6. Import / upload folder ảnh
+  7. Ảnh: danh sách, trạng thái, file, thumbnail
+  8. Phục vụ trang web & chạy server
 """
 
 import os
@@ -339,7 +340,58 @@ def get_project(project_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 5. IMPORT / UPLOAD FOLDER ẢNH
+# 5. CLASS (NHÃN)
+# ==========================================================
+
+class ClassIn(BaseModel):
+    name: str
+    color: str
+
+
+class ClassPatch(BaseModel):
+    name: Optional[str] = None
+    color: Optional[str] = None
+
+
+@app.get("/api/projects/{project_id}/classes")
+def list_classes(project_id: int, conn=Depends(get_conn)):
+    get_project_or_404(conn, project_id)
+    return [dict(c) for c in db.list_classes(conn, project_id)]
+
+
+@app.post("/api/projects/{project_id}/classes", status_code=201)
+def create_class(project_id: int, body: ClassIn, conn=Depends(get_conn)):
+    get_project_or_404(conn, project_id)
+    try:
+        class_id = db.create_class(conn, project_id, body.name, body.color)
+    except ValueError as error:
+        # Trùng tên là xung đột (409), các lỗi còn lại là dữ liệu sai (400)
+        raise HTTPException(409 if "đã tồn tại" in str(error) else 400, str(error))
+    return dict(db.get_class(conn, class_id))
+
+
+@app.patch("/api/classes/{class_id}")
+def update_class(class_id: int, body: ClassPatch, conn=Depends(get_conn)):
+    try:
+        db.update_class(conn, class_id, body.name, body.color)
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    except ValueError as error:
+        raise HTTPException(409 if "đã tồn tại" in str(error) else 400, str(error))
+    return dict(db.get_class(conn, class_id))
+
+
+@app.delete("/api/classes/{class_id}")
+def delete_class(class_id: int, conn=Depends(get_conn)):
+    try:
+        db.delete_class(conn, class_id)
+    except LookupError as error:
+        raise HTTPException(404, str(error))
+    return {"ok": True}
+
+
+# ==========================================================
+# 6. IMPORT / UPLOAD FOLDER ẢNH
 # ==========================================================
 
 class ImportIn(BaseModel):
@@ -413,7 +465,7 @@ def upload_finish(project_id: int, body: FinishIn, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 6. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
+# 7. ẢNH: DANH SÁCH, TRẠNG THÁI, FILE, THUMBNAIL
 # ==========================================================
 
 class StatusIn(BaseModel):
@@ -490,7 +542,7 @@ def image_thumb(image_id: int, conn=Depends(get_conn)):
 
 
 # ==========================================================
-# 7. PHỤC VỤ TRANG WEB & CHẠY SERVER
+# 8. PHỤC VỤ TRANG WEB & CHẠY SERVER
 # ==========================================================
 
 @app.middleware("http")
