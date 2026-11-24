@@ -36,6 +36,7 @@ function cleanRenderer(raw) {
   return text
     .replace(/^Vulkan [\d.]+ \((.*)\)$/, '$1')                   // "Vulkan 1.3.0 (Tên card)" → "Tên card"
     .replace(/\s*\(0x[0-9a-f]+\)/gi, '')                       // mã thiết bị
+    .replace(/\/(PCIe|PCI|SSE2)\b/gi, '')                      // "…RTX 3060/PCIe/SSE2" (driver NVIDIA trên Linux)
     .replace(/\s+Direct3D\w*/gi, '')
     .replace(/\s+(vs|ps)_\d_\d/gi, '')
     .replace(/\s+OpenGL( ES)?[\d. ]*/gi, ' ')
@@ -86,13 +87,27 @@ function classifyGpu(info) {
   };
 }
 
-// Tên card để hiển thị: ưu tiên mô tả của WebGPU, rồi tới tên WebGL, không có thì báo bị ẩn
+var VENDOR_NAMES = { nvidia: 'NVIDIA', amd: 'AMD', intel: 'Intel', apple: 'Apple', arm: 'Arm', qualcomm: 'Qualcomm' };
+
+// Tên card để hiển thị. Thứ tự ưu tiên (tên đầy đủ nhất trước):
+//   1. tên WebGL của card thật, vd "NVIDIA GeForce RTX 3060"
+//   2. mô tả của WebGPU, nếu có (trình duyệt thật thường để trống)
+//   3. hãng + kiến trúc của WebGPU, vd "NVIDIA (ampere)"  (WebGPU thường chỉ cho thông tin này, không có tên model)
+//   4. tên WebGL của card "phần mềm", vd SwiftShader
 function gpuDisplayName(info) {
   var webgpu = info && info.webgpu;
   var webgl = info && info.webgl;
-  var fromWebgpu = webgpu && webgpu.supported ? (webgpu.description || [webgpu.vendor, webgpu.architecture].filter(Boolean).join(' ')) : '';
-  if (fromWebgpu && !webgpu.fallback) return fromWebgpu;
-  if (webgl && webgl.renderer) return cleanRenderer(webgl.renderer);
+  var webglName = webgl && webgl.renderer ? cleanRenderer(webgl.renderer) : '';
+  var realWebgl = webglName && !SOFTWARE_RENDERER.test(webglName);
+  var realWebgpu = webgpu && webgpu.supported && !webgpu.fallback;
+
+  if (realWebgl) return webglName;
+  if (realWebgpu && webgpu.description) return webgpu.description;
+  if (realWebgpu && (webgpu.vendor || webgpu.architecture)) {
+    var vendor = VENDOR_NAMES[String(webgpu.vendor).toLowerCase()] || webgpu.vendor;
+    return vendor && webgpu.architecture ? vendor + ' (' + webgpu.architecture + ')' : (vendor || webgpu.architecture);
+  }
+  if (webglName) return webglName;
   if (webgl && webgl.hidden) return 'Hidden by your browser';
   return 'Not detected';
 }
